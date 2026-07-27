@@ -11,9 +11,9 @@ const VALUES = [
 ];
 
 const MILESTONES = [
-  { year: '2023', title: 'OneDW is born', description: 'Founded with a mission to make home services effortless.' },
-  { year: '2024', title: '10 cities live', description: 'Expanded across the region with 5,000+ verified pros.' },
-  { year: '2025', title: '120K jobs done', description: 'Reached 4.9 average rating from happy customers.' },
+  { year: '2023', title: 'OneDW is born', description: 'Founded with a mission to make home services effortless across India.' },
+  { year: '2024', title: '10 cities live', description: 'Expanded across the country with 5,000+ verified professionals.' },
+  { year: '2025', title: '3,50,000+ jobs done', description: 'Reached 4.9 average rating from happy customers nationwide.' },
 ];
 
 export default function AboutPage() {

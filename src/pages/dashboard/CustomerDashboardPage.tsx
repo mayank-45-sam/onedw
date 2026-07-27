@@ -100,7 +100,7 @@ export default function CustomerDashboardPage() {
           {recent.isLoading ? (
             <DashboardSkeleton />
           ) : !recent.data?.length ? (
-            <EmptyState title="No recent bookings" description="Demo data loading — your booking history will appear here." icon={<TrendingUp className="h-8 w-8" />} />
+            <EmptyState title="No recent bookings" description="Your completed bookings will appear here." icon={<TrendingUp className="h-8 w-8" />} />
           ) : (
             <div className="space-y-4">
               {recent.data.slice(0, 3).map((b, i) => <BookingCard key={b._id} booking={b} index={i} />)}
@@ -116,7 +116,7 @@ export default function CustomerDashboardPage() {
             {Array.from({ length: 4 }).map((_, i) => <DashboardSkeleton key={i} />)}
           </div>
         ) : !recommendedWorkers.data?.length ? (
-          <EmptyState title="No recommendations yet" description="Demo data loading — recommendations will appear shortly." icon={<Sparkles className="h-8 w-8" />} />
+          <EmptyState title="No recommendations yet" description="Complete a booking to get personalized recommendations." icon={<Sparkles className="h-8 w-8" />} />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {recommendedWorkers.data.slice(0, 4).map((w, i) => <WorkerCard key={w._id} worker={w} index={i} />)}
@@ -131,7 +131,7 @@ export default function CustomerDashboardPage() {
             {Array.from({ length: 3 }).map((_, i) => <DashboardSkeleton key={i} />)}
           </div>
         ) : !recommendedServices.data?.length ? (
-          <EmptyState title="No recommendations yet" description="Demo data loading — services will appear shortly." icon={<Wrench className="h-8 w-8" />} />
+          <EmptyState title="No recommendations yet" description="Browse services and our AI will suggest the best ones for you." icon={<Wrench className="h-8 w-8" />} />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {recommendedServices.data.slice(0, 3).map((s, i) => <ServiceCard key={s._id} service={s} index={i} />)}
@@ -145,7 +145,7 @@ export default function CustomerDashboardPage() {
         {recent.isLoading ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <AICardSkeleton key={i} />)}</div>
         ) : !recent.data?.length ? (
-          <EmptyState title="Nothing to continue" description="Demo data loading — your active bookings will appear here." icon={<Calendar className="h-8 w-8" />} />
+          <EmptyState title="Nothing to continue" description="Your active bookings will appear here." icon={<Calendar className="h-8 w-8" />} />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {recent.data.slice(0, 4).map((b, i) => <BookingCard key={b._id} booking={b} index={i} />)}
@@ -161,7 +161,7 @@ export default function CustomerDashboardPage() {
         ) : recentlyViewed.isError ? (
           <AIErrorState onRetry={() => recentlyViewed.refetch()} />
         ) : !recentlyViewed.data?.workers?.length && !recentlyViewed.data?.services?.length ? (
-          <AIEmptyState title="Nothing here yet" description="Demo data loading — pros and services you view will appear here." />
+          <AIEmptyState title="Nothing here yet" description="Pros and services you browse will appear here for quick access." />
         ) : (
           <div className="space-y-6">
             {recentlyViewed.data.workers.length > 0 && (

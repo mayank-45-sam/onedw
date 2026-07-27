@@ -46,9 +46,10 @@ export default function SettingsPage() {
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="en">English</SelectItem>
-                <SelectItem value="es">Español</SelectItem>
-                <SelectItem value="fr">Français</SelectItem>
-                <SelectItem value="de">Deutsch</SelectItem>
+                <SelectItem value="hi">हिन्दी</SelectItem>
+                <SelectItem value="ta">தமிழ்</SelectItem>
+                <SelectItem value="te">తెలుగు</SelectItem>
+                <SelectItem value="bn">বাংলা</SelectItem>
               </SelectContent>
             </Select>
           </div>

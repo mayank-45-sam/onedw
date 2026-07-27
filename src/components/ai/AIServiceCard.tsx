@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDuration } from '@/utils/format';
 import { cn } from '@/lib/utils';
+import { getServiceGradient, getServiceIcon, getServiceCategorySlug } from '@/utils/serviceImages';
 import type { Service } from '@/types';
 
 interface AIServiceCardProps {
@@ -16,7 +17,7 @@ interface AIServiceCardProps {
 }
 
 const VARIANT_LABEL: Record<NonNullable<AIServiceCardProps['variant']>, { label: string; icon: React.ReactNode; className: string }> = {
-  recommended: { label: 'AI pick', icon: <Sparkles className="h-3 w-3" />, className: 'bg-primary text-primary-foreground' },
+  recommended: { label: 'AI Pick', icon: <Sparkles className="h-3 w-3" />, className: 'bg-primary text-primary-foreground' },
   trending: { label: 'Trending', icon: <TrendingUp className="h-3 w-3" />, className: 'bg-accent text-accent-foreground' },
   alsoBooked: { label: 'People also booked', icon: <TrendingUp className="h-3 w-3" />, className: 'bg-foreground text-background' },
   together: { label: 'Frequently booked together', icon: <Sparkles className="h-3 w-3" />, className: 'bg-success text-white' },
@@ -39,6 +40,10 @@ export function AIServiceCard({ service, index = 0, variant = 'recommended', onT
     onToggleFavorite?.(service._id);
   };
 
+  const slug = getServiceCategorySlug(service);
+  const gradient = getServiceGradient(service, index);
+  const Icon = getServiceIcon(slug);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -57,7 +62,9 @@ export function AIServiceCard({ service, index = 0, variant = 'recommended', onT
               <img src={service.image} alt={service.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" onLoad={() => setImgLoaded(true)} onError={() => setImgError(true)} />
             </>
           ) : (
-            <div className="h-full w-full bg-gradient-to-br from-primary/10 to-accent/10" />
+            <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradient}`}>
+              <Icon className="h-16 w-16 text-white/80 drop-shadow-sm" />
+            </div>
           )}
           <div className="absolute left-3 top-3 flex gap-2">
             <Badge className={cn('gap-1', v.className)}>{v.icon} {v.label}</Badge>
@@ -90,7 +97,7 @@ export function AIServiceCard({ service, index = 0, variant = 'recommended', onT
               <p className="font-bold font-display text-lg">{formatCurrency(service.basePrice)}</p>
             </div>
             <Button size="sm" className="btn-glow gap-1 rounded-full">
-              Book <ArrowRight className="h-3.5 w-3.5" />
+              Book Now <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

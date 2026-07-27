@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Star, ThumbsUp } from 'lucide-react';
+import { Star, ThumbsUp, MessageSquare } from 'lucide-react';
 import { reviewService } from '@/services/review.service';
 import { queryKeys } from '@/lib/queryClient';
 import { StarRating } from '@/components/common/StarRating';
-import { EmptyState, ErrorState, LoadingState } from '@/components/common/States';
 import { Pagination } from '@/components/common/Pagination';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { formatDate } from '@/utils/format';
 
 const LIMIT = 10;
@@ -16,9 +16,10 @@ const LIMIT = 10;
 export default function ReviewsPage() {
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.reviews.all({ page, limit: LIMIT }),
     queryFn: () => reviewService.list({ page, limit: LIMIT }),
+    retry: 2,
   });
 
   const totalPages = data ? Math.ceil(data.total / LIMIT) : 1;
@@ -31,15 +32,44 @@ export default function ReviewsPage() {
       </div>
 
       {isLoading ? (
-        <LoadingState />
+        <div className="grid gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="shimmer h-10 w-10 rounded-full" />
+                <div className="space-y-2 flex-1">
+                  <div className="shimmer h-4 w-1/3 rounded" />
+                  <div className="shimmer h-3 w-1/4 rounded" />
+                </div>
+              </div>
+              <div className="shimmer h-4 w-1/2 rounded" />
+              <div className="shimmer h-16 w-full rounded" />
+            </Card>
+          ))}
+        </div>
       ) : isError ? (
-        <ErrorState title="Couldn't load reviews" icon={<Star className="h-8 w-8" />} />
+        <div className="card-premium p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-error/10 text-error">
+            <Star className="h-7 w-7" />
+          </div>
+          <h3 className="font-semibold font-display">Couldn't load reviews</h3>
+          <p className="mt-2 max-w-sm mx-auto text-sm text-muted-foreground">
+            Something went wrong while loading your reviews. Please check your connection and try again.
+          </p>
+          <Button onClick={() => refetch()} size="sm" className="mt-4 rounded-full gap-2">
+            Try again
+          </Button>
+        </div>
       ) : !data?.data?.length ? (
-        <EmptyState
-          title="No reviews yet"
-          description="Reviews from customers will appear here once you complete jobs."
-          icon={<Star className="h-8 w-8" />}
-        />
+        <div className="card-premium p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+            <MessageSquare className="h-7 w-7" />
+          </div>
+          <h3 className="font-semibold font-display">No reviews yet</h3>
+          <p className="mt-2 max-w-sm mx-auto text-sm text-muted-foreground">
+            Reviews from customers will appear here once you complete jobs. Keep up the great work!
+          </p>
+        </div>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2">

@@ -16,13 +16,13 @@ export function formatDuration(minutes: number) {
 }
 
 export function formatDate(date: string | Date, opts?: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat('en-US', opts ?? { month: 'short', day: 'numeric', year: 'numeric' }).format(
+  return new Intl.DateTimeFormat('en-IN', opts ?? { month: 'short', day: 'numeric', year: 'numeric' }).format(
     new Date(date)
   );
 }
 
 export function formatTime(date: string | Date) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(date));
+  return new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(date));
 }
 
 export function timeAgo(date: string | Date) {

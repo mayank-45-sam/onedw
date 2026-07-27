@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   Search, BadgeCheck, Star, ArrowRight, Download,
   Sparkles, Wrench, Smartphone, Apple, Users, Wallet, Zap, TrendingUp, MapPin,
-  Camera, UserCheck,
+  Camera, UserCheck, Heart, CheckCircle2,
 } from 'lucide-react';
 import { SearchBar } from '@/components/common/SearchBar';
 import { SectionHeader } from '@/components/common/SectionHeader';
@@ -15,7 +15,7 @@ import { AIRecommendationBanner } from '@/components/common/AIRecommendationBann
 import { AIWorkerCard } from '@/components/ai/AIWorkerCard';
 import { AIServiceCard } from '@/components/ai/AIServiceCard';
 import { RecommendationCarousel } from '@/components/ai/RecommendationCarousel';
-import { AICardSkeleton, AIBannerSkeleton } from '@/components/ai/AISkeleton';
+import { AICardSkeleton } from '@/components/ai/AISkeleton';
 import { AIEmptyState, AIErrorState } from '@/components/ai/AIEmptyState';
 import { StarRating } from '@/components/common/StarRating';
 import {
@@ -29,11 +29,15 @@ import { workerService } from '@/services/worker.service';
 import { categoryService } from '@/services/category.service';
 import { reviewService } from '@/services/review.service';
 import { queryKeys } from '@/lib/queryClient';
-import { HOW_IT_WORKS_STEPS, STATS, TRUST_BADGES, APP_NAME } from '@/constants/app';
+import { HOW_IT_WORKS_STEPS, HOMEPAGE_STATS, TRUST_BADGES, APP_NAME } from '@/constants/app';
 import { ROUTES } from '@/constants/routes';
 
 const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Search, Camera, UserCheck, MapPin,
+};
+
+const STAT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Heart, BadgeCheck, CheckCircle2, Star,
 };
 
 export default function LandingPage() {
@@ -49,9 +53,13 @@ export default function LandingPage() {
     queryFn: () => serviceService.list({ sort: 'popular', limit: 6 }),
   });
   const trendingWorkers = useQuery({ queryKey: queryKeys.workers.trending, queryFn: () => workerService.trending() });
-  const reviews = useQuery({ queryKey: queryKeys.reviews.all({ limit: 4 }), queryFn: () => reviewService.list({ limit: 4 }) });
+  const reviews = useQuery({
+    queryKey: queryKeys.reviews.all({ limit: 4 }),
+    queryFn: () => reviewService.list({ limit: 4 }),
+    retry: 2,
+    staleTime: 30 * 1000,
+  });
 
-  // AI recommendation queries — all API-ready via existing services
   const recommendedServices = useQuery({
     queryKey: queryKeys.services.recommended({}),
     queryFn: () => serviceService.recommended({}),
@@ -186,7 +194,6 @@ export default function LandingPage() {
       {/* AI EXPERIENCE — Recommended Services + Workers */}
       <section className="container py-12 md:py-16">
         <div className="grid gap-10 lg:grid-cols-2">
-          {/* Recommended Services */}
           <div>
             <SectionHeader
               title="Recommended services"
@@ -200,7 +207,10 @@ export default function LandingPage() {
               ) : recommendedServices.isError ? (
                 <AIErrorState onRetry={() => recommendedServices.refetch()} />
               ) : !recommendedServices.data?.length ? (
-                <AIEmptyState description="Personalized service picks appear after your first booking." />
+                <AIEmptyState
+                  title="Personalized picks coming soon"
+                  description="Book a few services and our AI will recommend the best ones for you. In the meantime, explore our popular services."
+                />
               ) : (
                 <RecommendationCarousel
                   items={recommendedServices.data.slice(0, 6)}
@@ -211,7 +221,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Recommended Workers */}
           <div>
             <SectionHeader
               title="Recommended pros"
@@ -225,7 +234,10 @@ export default function LandingPage() {
               ) : recommendedWorkers.isError ? (
                 <AIErrorState onRetry={() => recommendedWorkers.refetch()} />
               ) : !recommendedWorkers.data?.length ? (
-                <AIEmptyState description="Pro recommendations appear after your first booking." />
+                <AIEmptyState
+                  title="Pro recommendations coming soon"
+                  description="Once you book your first service, we'll suggest the perfect pros based on your location and preferences."
+                />
               ) : (
                 <RecommendationCarousel
                   items={recommendedWorkers.data.slice(0, 6)}
@@ -252,7 +264,7 @@ export default function LandingPage() {
           ) : trendingServices.isError ? (
             <AIErrorState onRetry={() => trendingServices.refetch()} />
           ) : !trendingServices.data?.data?.length ? (
-            <AIEmptyState title="No trending services" description="Trending picks will appear here once available." />
+            <AIEmptyState title="No trending services yet" description="Trending picks will appear here once booking activity picks up." />
           ) : (
             <RecommendationCarousel
               items={trendingServices.data.data}
@@ -277,7 +289,7 @@ export default function LandingPage() {
           ) : trendingWorkers.isError ? (
             <AIErrorState onRetry={() => trendingWorkers.refetch()} />
           ) : !trendingWorkers.data?.length ? (
-            <AIEmptyState title="No pros nearby yet" description="Nearby pros will appear here once available." />
+            <AIEmptyState title="No pros nearby yet" description="Enable your location to discover verified professionals in your area." />
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {trendingWorkers.data.slice(0, 4).map((w, i) => <WorkerCard key={w._id} worker={w} index={i} />)}
@@ -300,7 +312,7 @@ export default function LandingPage() {
           ) : bestRatedWorkers.isError ? (
             <AIErrorState onRetry={() => bestRatedWorkers.refetch()} />
           ) : !bestRatedWorkers.data?.data?.length ? (
-            <AIEmptyState title="No top-rated pros yet" description="Best-rated pros will appear here once available." />
+            <AIEmptyState title="No top-rated pros yet" description="The highest-rated pros will appear here as more reviews come in." />
           ) : (
             <RecommendationCarousel
               items={bestRatedWorkers.data.data}
@@ -314,7 +326,6 @@ export default function LandingPage() {
       {/* AI EXPERIENCE — Fast Booking + Budget Friendly */}
       <section className="container py-12 md:py-16">
         <div className="grid gap-10 lg:grid-cols-2">
-          {/* Fast Booking */}
           <div>
             <SectionHeader
               title="Fast booking"
@@ -328,7 +339,7 @@ export default function LandingPage() {
               ) : fastBookingWorkers.isError ? (
                 <AIErrorState onRetry={() => fastBookingWorkers.refetch()} />
               ) : !fastBookingWorkers.data?.data?.length ? (
-                <AIEmptyState title="No fast-book pros yet" />
+                <AIEmptyState title="No fast-book pros yet" description="Pros with quick turnaround times will appear here." />
               ) : (
                 <RecommendationCarousel
                   items={fastBookingWorkers.data.data}
@@ -339,7 +350,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Budget Friendly */}
           <div>
             <SectionHeader
               title="Budget friendly"
@@ -353,7 +363,7 @@ export default function LandingPage() {
               ) : budgetFriendlyWorkers.isError ? (
                 <AIErrorState onRetry={() => budgetFriendlyWorkers.refetch()} />
               ) : !budgetFriendlyWorkers.data?.data?.length ? (
-                <AIEmptyState title="No budget pros yet" />
+                <AIEmptyState title="No budget pros yet" description="Affordable yet quality professionals will appear here soon." />
               ) : (
                 <RecommendationCarousel
                   items={budgetFriendlyWorkers.data.data}
@@ -424,9 +434,10 @@ export default function LandingPage() {
 
       {/* STATS */}
       <section className="container py-16 md:py-20">
+        <SectionHeader title="Trusted by lakhs" subtitle="Numbers that speak for our commitment to quality." className="mb-10" />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {STATS.map((stat, i) => {
-            const value = stat.value;
+          {HOMEPAGE_STATS.map((stat, i) => {
+            const Icon = STAT_ICONS[stat.icon] ?? Star;
             return (
               <motion.div
                 key={stat.label}
@@ -434,10 +445,14 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="card-premium p-6 text-center"
+                className="card-premium card-premium-hover p-6 text-center"
               >
-                <p className="text-3xl font-extrabold font-display gradient-text md:text-4xl">{value}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Icon className="h-6 w-6" />
+                </div>
+                <p className="text-3xl font-extrabold font-display gradient-text md:text-4xl">{stat.value}</p>
+                <p className="mt-1 text-sm font-semibold">{stat.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{stat.description}</p>
               </motion.div>
             );
           })}
@@ -459,9 +474,31 @@ export default function LandingPage() {
               ))}
             </div>
           ) : reviews.isError ? (
-            <ErrorState title="Couldn't load reviews" description="Please try again later." icon={<Star className="h-8 w-8" />} />
+            <div className="card-premium p-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+                <Star className="h-7 w-7" />
+              </div>
+              <h3 className="font-semibold font-display">Reviews are loading soon</h3>
+              <p className="mt-2 max-w-sm mx-auto text-sm text-muted-foreground">
+                Our customers love sharing their experiences. Check back soon to see what they're saying about OneDW!
+              </p>
+              <Button variant="outline" size="sm" className="mt-4 rounded-full" onClick={() => reviews.refetch()}>
+                Refresh
+              </Button>
+            </div>
           ) : !reviews.data?.data?.length ? (
-            <EmptyState title="No reviews yet" description="Customer reviews will appear here once available." icon={<Star className="h-8 w-8" />} />
+            <div className="card-premium p-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+                <Star className="h-7 w-7" />
+              </div>
+              <h3 className="font-semibold font-display">Be the first to review</h3>
+              <p className="mt-2 max-w-sm mx-auto text-sm text-muted-foreground">
+                Complete a booking and share your experience! Your review helps others find the best professionals.
+              </p>
+              <Button asChild size="sm" className="mt-4 btn-glow rounded-full">
+                <Link to={ROUTES.services}>Explore Services</Link>
+              </Button>
+            </div>
           ) : (
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
               {reviews.data.data.map((r, i) => (

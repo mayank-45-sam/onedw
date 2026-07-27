@@ -478,7 +478,7 @@ export default function BookingPage() {
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <FormField label="Address line 1" form={addressForm} name="line1" placeholder="123 Main St" />
                   <FormField label="Address line 2" form={addressForm} name="line2" placeholder="Apt, suite (optional)" />
-                  <FormField label="City"        form={addressForm} name="city"       placeholder="New York" />
+                  <FormField label="City"        form={addressForm} name="city"       placeholder="Mumbai" />
                   <FormField label="State"       form={addressForm} name="state"      placeholder="NY" />
                   <FormField label="Postal code" form={addressForm} name="postalCode" placeholder="10001" />
                   <FormField label="Country"     form={addressForm} name="country"    placeholder="USA" />

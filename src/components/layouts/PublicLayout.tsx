@@ -210,8 +210,8 @@ function Footer() {
       </div>
       <div className="border-t py-6">
         <div className="container flex flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} OneDW. All rights reserved.</p>
-          <p>Built for Express.js + MongoDB backend.</p>
+          <p>&copy; {new Date().getFullYear()} OneDW. All rights reserved.</p>
+          <p>Made with care for homeowners across India.</p>
         </div>
       </div>
     </footer>

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, Star, MapPin, Clock, Zap, ArrowRight, Sparkles, TrendingUp, Wallet } from 'lucide-react';
+import { BadgeCheck, Star, MapPin, Clock, Zap, ArrowRight, Sparkles, TrendingUp, Wallet, Briefcase, Globe } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,12 +12,36 @@ type AIVariant = 'recommended' | 'budget' | 'fastest' | 'highest-rated';
 
 const VARIANT_CONFIG: Record<
   AIVariant,
-  { label: string; icon: React.ReactNode; accent: string; ring: string }
+  { label: string; icon: React.ReactNode; accent: string; ring: string; reason: string }
 > = {
-  recommended: { label: 'AI pick', icon: <Sparkles className="h-3.5 w-3.5" />, accent: 'text-primary', ring: 'bg-primary/10' },
-  budget: { label: 'Budget pick', icon: <Wallet className="h-3.5 w-3.5" />, accent: 'text-success', ring: 'bg-success/10' },
-  fastest: { label: 'Fastest', icon: <Zap className="h-3.5 w-3.5" />, accent: 'text-warning', ring: 'bg-warning/10' },
-  'highest-rated': { label: 'Top rated', icon: <TrendingUp className="h-3.5 w-3.5" />, accent: 'text-rose-500', ring: 'bg-rose-500/10' },
+  recommended: {
+    label: 'AI Pick',
+    icon: <Sparkles className="h-3.5 w-3.5" />,
+    accent: 'text-primary',
+    ring: 'bg-primary/10',
+    reason: 'High rating, fast response, and matches your preferences',
+  },
+  budget: {
+    label: 'Budget Pick',
+    icon: <Wallet className="h-3.5 w-3.5" />,
+    accent: 'text-success',
+    ring: 'bg-success/10',
+    reason: 'Best value — quality service at the lowest rate',
+  },
+  fastest: {
+    label: 'Fastest',
+    icon: <Zap className="h-3.5 w-3.5" />,
+    accent: 'text-warning',
+    ring: 'bg-warning/10',
+    reason: 'Closest available pro — shortest ETA to your location',
+  },
+  'highest-rated': {
+    label: 'Top Rated',
+    icon: <TrendingUp className="h-3.5 w-3.5" />,
+    accent: 'text-rose-500',
+    ring: 'bg-rose-500/10',
+    reason: 'Highest customer ratings and most positive reviews',
+  },
 };
 
 interface AIWorkerCardProps {
@@ -40,6 +64,7 @@ export function AIWorkerCard({
   savings,
 }: AIWorkerCardProps) {
   const cfg = VARIANT_CONFIG[variant];
+  const topSkills = worker.skills?.slice(0, 2) ?? [];
 
   return (
     <motion.div
@@ -71,9 +96,17 @@ export function AIWorkerCard({
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <StarRating rating={worker.rating} size={13} showValue reviewCount={worker.reviewCount} />
           <span className="flex items-center gap-0.5">
-            <MapPin className="h-3 w-3" /> {worker.experienceYears}y exp
+            <Briefcase className="h-3 w-3" /> {worker.experienceYears}y exp
           </span>
+          {worker.languages?.length > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Globe className="h-3 w-3" /> {worker.languages.slice(0, 2).join(', ')}
+            </span>
+          )}
         </div>
+
+        {/* Why this pro? */}
+        <p className="mt-2 text-[11px] text-muted-foreground italic">{cfg.reason}</p>
 
         {/* Variant-specific metrics */}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -110,6 +143,17 @@ export function AIWorkerCard({
           )}
         </div>
 
+        {/* Top skills */}
+        {topSkills.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {topSkills.map((skill) => (
+              <Badge key={skill} variant="secondary" className="text-[10px] px-2 py-0.5">
+                {skill}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         <div className="mt-auto flex items-center justify-between pt-4">
           <div>
             <span className="text-xs text-muted-foreground">from</span>
@@ -117,10 +161,10 @@ export function AIWorkerCard({
           </div>
           <div className="flex gap-2">
             <Button asChild size="sm" variant="outline" className="rounded-full">
-              <Link to={`/workers/${worker._id}`}>View</Link>
+              <Link to={`/workers/${worker._id}`}>View Profile</Link>
             </Button>
             <Button asChild size="sm" className="btn-glow gap-1 rounded-full">
-              <Link to={`/book?worker=${worker._id}`}>Book <ArrowRight className="h-3.5 w-3.5" /></Link>
+              <Link to={`/book?worker=${worker._id}`}>Book Now <ArrowRight className="h-3.5 w-3.5" /></Link>
             </Button>
           </div>
         </div>

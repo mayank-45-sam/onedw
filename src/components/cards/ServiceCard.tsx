@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDuration } from '@/utils/format';
+import { getServiceGradient, getServiceIcon, getServiceCategorySlug } from '@/utils/serviceImages';
 import type { Service } from '@/types';
 
 interface ServiceCardProps {
@@ -28,6 +29,10 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
     setFav((p) => !p);
     onToggleFavorite?.(service._id);
   };
+
+  const slug = getServiceCategorySlug(service);
+  const gradient = getServiceGradient(service, index);
+  const Icon = getServiceIcon(slug);
 
   return (
     <motion.div
@@ -53,7 +58,9 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
               />
             </>
           ) : (
-            <div className="h-full w-full bg-gradient-to-br from-primary/10 to-accent/10" />
+            <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradient}`}>
+              <Icon className="h-16 w-16 text-white/80 drop-shadow-sm" />
+            </div>
           )}
           <div className="absolute left-3 top-3 flex gap-2">
             {service.popular && <Badge className="bg-primary text-primary-foreground">Popular</Badge>}
@@ -79,6 +86,9 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" /> {formatDuration(service.duration)}
             </span>
+            {typeof service.reviewCount === 'number' && (
+              <span>({service.reviewCount})</span>
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between">
@@ -87,7 +97,7 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
               <p className="font-bold font-display text-lg">{formatCurrency(service.basePrice)}</p>
             </div>
             <Button size="sm" className="btn-glow rounded-full">
-              Book now
+              Book Now
             </Button>
           </div>
         </div>

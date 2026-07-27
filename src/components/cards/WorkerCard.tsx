@@ -1,8 +1,9 @@
-import { BadgeCheck, MapPin } from 'lucide-react';
+import { BadgeCheck, MapPin, Briefcase, Globe, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/common/StarRating';
 import { initials } from '@/utils/format';
 import { formatCurrency } from '@/utils/format';
@@ -14,6 +15,8 @@ interface WorkerCardProps {
 }
 
 export function WorkerCard({ worker, index = 0 }: WorkerCardProps) {
+  const topSkills = worker.skills?.slice(0, 3) ?? [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -29,6 +32,11 @@ export function WorkerCard({ worker, index = 0 }: WorkerCardProps) {
         {worker.isOnline && (
           <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-success animate-pulse" /> Online
+          </span>
+        )}
+        {worker.isVerified && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-primary/90 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+            <BadgeCheck className="h-3.5 w-3.5" /> Verified
           </span>
         )}
       </div>
@@ -49,10 +57,31 @@ export function WorkerCard({ worker, index = 0 }: WorkerCardProps) {
 
         <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
           <StarRating rating={worker.rating} size={14} showValue reviewCount={worker.reviewCount} />
-          <span className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" /> {worker.experienceYears}y exp
-          </span>
         </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Briefcase className="h-3 w-3" /> {worker.experienceYears}y exp
+          </span>
+          <span className="flex items-center gap-1">
+            <Star className="h-3 w-3 fill-warning text-warning" /> {worker.completedJobs} jobs
+          </span>
+          {worker.languages?.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Globe className="h-3 w-3" /> {worker.languages.slice(0, 2).join(', ')}
+            </span>
+          )}
+        </div>
+
+        {topSkills.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {topSkills.map((skill) => (
+              <Badge key={skill} variant="secondary" className="text-[10px] px-2 py-0.5">
+                {skill}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         <div className="mt-auto flex items-center justify-between pt-4">
           <div>
@@ -60,7 +89,7 @@ export function WorkerCard({ worker, index = 0 }: WorkerCardProps) {
             <p className="font-bold font-display">{formatCurrency(worker.hourlyRate)}/hr</p>
           </div>
           <Button asChild size="sm" className="btn-glow rounded-full">
-            <Link to={`/workers/${worker._id}`}>View profile</Link>
+            <Link to={`/workers/${worker._id}`}>View Profile</Link>
           </Button>
         </div>
       </div>

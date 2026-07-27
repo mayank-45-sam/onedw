@@ -119,7 +119,7 @@ export default function WorkerDetailPage() {
                 <Link to={ROUTES.chat}><MessageSquare className="h-5 w-5" /></Link>
               </Button>
               <Button asChild className="btn-glow gap-2 rounded-full">
-                <Link to={`${ROUTES.booking}?worker=${w._id}`}><Calendar className="h-4 w-4" /> Book now</Link>
+                <Link to={`${ROUTES.booking}?worker=${w._id}`}><Calendar className="h-4 w-4" /> Book Now</Link>
               </Button>
             </div>
           </div>
@@ -241,7 +241,7 @@ export default function WorkerDetailPage() {
               <p className="text-sm text-muted-foreground">Starting from</p>
               <p className="text-3xl font-extrabold font-display gradient-text">{formatCurrency(w.hourlyRate)}<span className="text-base font-normal text-muted-foreground">/hr</span></p>
               <Button asChild className="btn-glow mt-4 w-full gap-2 rounded-xl">
-                <Link to={`${ROUTES.booking}?worker=${w._id}`}><Calendar className="h-4 w-4" /> Book this pro</Link>
+                <Link to={`${ROUTES.booking}?worker=${w._id}`}><Calendar className="h-4 w-4" /> Book Now</Link>
               </Button>
               <Button asChild variant="outline" className="mt-2 w-full gap-2 rounded-xl">
                 <Link to={ROUTES.chat}><MessageSquare className="h-4 w-4" /> Chat</Link>

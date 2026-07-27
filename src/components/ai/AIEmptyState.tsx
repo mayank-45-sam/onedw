@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Sparkles, RotateCw } from 'lucide-react';
+import { Sparkles, RotateCw, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -11,8 +11,8 @@ interface AIEmptyStateProps {
 }
 
 export function AIEmptyState({
-  title = 'No recommendations available',
-  description = "We're still learning about your preferences. Book a few services and personalized picks will appear here.",
+  title = 'Great picks are on the way',
+  description = "We're still learning about your preferences. Book a few services and our AI will suggest personalized recommendations just for you.",
   onRetry,
   className,
 }: AIEmptyStateProps) {
@@ -48,8 +48,8 @@ interface AIErrorStateProps {
 }
 
 export function AIErrorState({
-  title = 'Recommendations unavailable',
-  description = 'We hit a snag loading AI suggestions. Please try again.',
+  title = 'Oops, something went wrong',
+  description = "We couldn't load recommendations right now. Don't worry — tap below to try again.",
   onRetry,
   className,
 }: AIErrorStateProps) {
@@ -58,13 +58,13 @@ export function AIErrorState({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        'relative overflow-hidden rounded-3xl border border-error/20 bg-error/5 p-8 text-center',
+        'relative overflow-hidden rounded-3xl border border-dashed bg-gradient-to-br from-error/5 to-warning/5 p-8 text-center',
         className
       )}
     >
       <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-error/10 blur-3xl" />
       <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-error/10 text-error">
-        <RotateCw className="h-7 w-7" />
+        <Heart className="h-7 w-7" />
       </div>
       <h3 className="relative mt-4 text-lg font-semibold font-display">{title}</h3>
       <p className="relative mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{description}</p>

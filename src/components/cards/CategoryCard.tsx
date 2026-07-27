@@ -1,17 +1,25 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Users, Star } from 'lucide-react';
 import type { Category } from '@/types';
 import { CATEGORY_ICONS, CATEGORY_GRADIENTS } from '@/constants/categoryIcons';
 
-export function CategoryCard({ category, index = 0 }: { category: Category; index?: number }) {
+interface CategoryCardProps {
+  category: Category;
+  index?: number;
+}
+
+export function CategoryCard({ category, index = 0 }: CategoryCardProps) {
   const slug = category.slug;
   const Icon = CATEGORY_ICONS[slug] ?? CATEGORY_ICONS.default;
   const gradient = CATEGORY_GRADIENTS[slug] ?? 'from-gray-400 to-gray-500';
 
   const [imageError, setImageError] = useState(false);
   const hasImage = Boolean(category.image) && !imageError;
+
+  const professionalCount = (category as unknown as Record<string, unknown>).professionalCount as number | undefined;
+  const avgRating = (category as unknown as Record<string, unknown>).avgRating as number | undefined;
 
   return (
     <motion.div
@@ -49,6 +57,18 @@ export function CategoryCard({ category, index = 0 }: { category: Category; inde
               {category.serviceCount} service{category.serviceCount !== 1 ? 's' : ''}
             </p>
           )}
+          <div className="mt-1 flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+            {typeof professionalCount === 'number' && professionalCount > 0 && (
+              <span className="flex items-center gap-0.5">
+                <Users className="h-3 w-3" /> {professionalCount} pros
+              </span>
+            )}
+            {typeof avgRating === 'number' && avgRating > 0 && (
+              <span className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-warning text-warning" /> {avgRating.toFixed(1)}
+              </span>
+            )}
+          </div>
         </div>
 
         <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100" />

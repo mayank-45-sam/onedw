@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Sparkles, X } from 'lucide-react';
+import { Search, MapPin, Sparkles, X, Navigation } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { serviceService } from '@/services/service.service';
 import { categoryService } from '@/services/category.service';
@@ -10,10 +10,15 @@ import { cn } from '@/lib/utils';
 
 const QUICK_QUERIES = ['Plumber', 'Deep clean', 'AC repair', 'Electrician', 'Salon at home'];
 
+const INDIAN_CITIES = [
+  'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai',
+  'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow',
+];
+
 export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
-  const [location, setLocation] = useState('New York');
+  const [location, setLocation] = useState('Mumbai');
   const [open, setOpen] = useState(false);
 
   const { data: suggestions } = useQuery({
@@ -23,7 +28,7 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
   });
 
   const { data: categories } = useQuery({
-    queryKey: queryKeysCategories,
+    queryKey: ['categories', 'list'],
     queryFn: () => categoryService.list(),
   });
 
@@ -31,6 +36,19 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
     const query = term ?? q;
     navigate(`/search?q=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`);
     setOpen(false);
+  };
+
+  const detectLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          const nearestCity = findNearestCity(latitude, longitude);
+          if (nearestCity) setLocation(nearestCity);
+        },
+        () => setLocation('Mumbai')
+      );
+    }
   };
 
   return (
@@ -43,7 +61,16 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
             onChange={(e) => setLocation(e.target.value)}
             className="w-24 bg-transparent outline-none"
             aria-label="Location"
+            placeholder="City"
           />
+          <button
+            onClick={detectLocation}
+            className="text-primary hover:text-primary/80 transition"
+            title="Use current location"
+            aria-label="Use current location"
+          >
+            <Navigation className="h-3.5 w-3.5" />
+          </button>
         </div>
         <Search className="h-5 w-5 text-muted-foreground" />
         <input
@@ -111,6 +138,21 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
                     </div>
                   </>
                 ) : null}
+                <p className="mb-2 mt-4 text-xs font-semibold text-muted-foreground">Quick cities</p>
+                <div className="flex flex-wrap gap-2">
+                  {INDIAN_CITIES.slice(0, 5).map((city) => (
+                    <button
+                      key={city}
+                      onClick={() => {
+                        setLocation(city);
+                        setOpen(false);
+                      }}
+                      className="flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition hover:border-primary hover:text-primary"
+                    >
+                      <MapPin className="h-3 w-3" /> {city}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {suggestions?.data?.map((s) => (
@@ -119,11 +161,18 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
                 onClick={() => navigate(`/book?service=${s._id}`)}
                 className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition hover:bg-muted"
               >
-                {s.image && <img src={s.image} alt="" className="h-9 w-9 rounded-lg object-cover" />}
+                {s.image ? (
+                  <img src={s.image} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                ) : (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Search className="h-4 w-4" />
+                  </div>
+                )}
                 <div className="flex-1">
                   <p className="text-sm font-medium line-clamp-1">{s.name}</p>
                   <p className="text-xs text-muted-foreground">{s.category?.name}</p>
                 </div>
+                <span className="text-xs font-semibold text-primary">₹{s.basePrice}</span>
               </button>
             ))}
           </motion.div>
@@ -133,4 +182,24 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
   );
 }
 
-const queryKeysCategories = ['categories', 'list'] as const;
+function findNearestCity(lat: number, lng: number): string | null {
+  const cities: { name: string; lat: number; lng: number }[] = [
+    { name: 'Mumbai', lat: 19.076, lng: 72.8777 },
+    { name: 'Delhi', lat: 28.7041, lng: 77.1025 },
+    { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
+    { name: 'Hyderabad', lat: 17.385, lng: 78.4867 },
+    { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
+    { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
+    { name: 'Pune', lat: 18.5204, lng: 73.8567 },
+    { name: 'Ahmedabad', lat: 23.0225, lng: 72.5714 },
+    { name: 'Jaipur', lat: 26.9124, lng: 75.7873 },
+    { name: 'Lucknow', lat: 26.8467, lng: 80.9462 },
+  ];
+  let best = cities[0];
+  let bestDist = Infinity;
+  for (const c of cities) {
+    const d = Math.hypot(lat - c.lat, lng - c.lng);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  return bestDist < 15 ? best.name : 'Mumbai';
+}

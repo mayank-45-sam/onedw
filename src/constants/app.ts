@@ -4,9 +4,9 @@ export const APP_DESCRIPTION =
   'Book trusted local pros for home, beauty, and repair services in minutes. Verified workers, transparent pricing, real-time tracking.';
 
 export const CURRENCY = {
-  code: 'USD',
-  symbol: '$',
-  locale: 'en-US',
+  code: 'INR',
+  symbol: '₹',
+  locale: 'en-IN',
 };
 
 export const SERVICE_ICONS: Record<string, string> = {
@@ -50,10 +50,17 @@ export const HOW_IT_WORKS_STEPS = [
 ] as const;
 
 export const STATS = [
-  { label: 'Completed jobs', value: '120K+', icon: 'CheckCircle2' },
-  { label: 'Verified pros', value: '8,500+', icon: 'BadgeCheck' },
-  { label: 'Avg. rating', value: '4.9', icon: 'Star' },
-  { label: 'Cities served', value: '42', icon: 'MapPin' },
+  { label: 'Happy Customers', value: '1,20,000+', icon: 'Heart' },
+  { label: 'Verified Professionals', value: '8,500+', icon: 'BadgeCheck' },
+  { label: 'Completed Jobs', value: '3,50,000+', icon: 'CheckCircle2' },
+  { label: 'Average Rating', value: '4.9', icon: 'Star' },
+] as const;
+
+export const HOMEPAGE_STATS = [
+  { label: 'Happy Customers', value: '1,20,000+', icon: 'Heart', description: 'Trusted by families across India' },
+  { label: 'Verified Professionals', value: '8,500+', icon: 'BadgeCheck', description: 'Background-checked & certified' },
+  { label: 'Completed Jobs', value: '3,50,000+', icon: 'CheckCircle2', description: 'And counting every day' },
+  { label: 'Average Rating', value: '4.9', icon: 'Star', description: 'Based on real customer reviews' },
 ] as const;
 
 export const TRUST_BADGES = [
