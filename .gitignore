@@ -70,3 +70,5 @@ backend/tests/run
 # IDE
 .vscode/settings.json
 .idea/
+.env
+.env.*s
