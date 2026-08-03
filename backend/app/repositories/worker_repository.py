@@ -17,6 +17,7 @@ class WorkerRepository(BaseRepository[Worker]):
         skip: int = 0,
         limit: int = 20,
         category_id: Optional[str] = None,
+        search: Optional[str] = None,
         min_rating: Optional[float] = None,
         min_experience: Optional[int] = None,
         max_price: Optional[float] = None,
@@ -28,6 +29,15 @@ class WorkerRepository(BaseRepository[Worker]):
 
         if category_id:
             query = query.filter(Worker.category_ids.contains(category_id))
+        if search:
+            term = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    Worker.name.ilike(term),
+                    Worker.profession.ilike(term),
+                    Worker.bio.ilike(term),
+                )
+            )
         if min_rating is not None:
             query = query.filter(Worker.rating >= min_rating)
         if min_experience is not None:
@@ -71,3 +81,12 @@ class WorkerRepository(BaseRepository[Worker]):
 
     def get_by_user_id(self, user_id: str) -> Optional[Worker]:
         return self.db.query(Worker).filter(Worker.user_id == user_id).first()
+
+    def get_aadhaar_status(self, worker_id: str) -> Optional[dict]:
+        worker = self.db.query(Worker).filter(Worker.id == worker_id).first()
+        if worker is None:
+            return None
+        return {
+            "aadhaar_verified": worker.aadhaar_verified,
+            "aadhaar_verified_at": worker.aadhaar_verified_at.isoformat() if worker.aadhaar_verified_at else None,
+        }

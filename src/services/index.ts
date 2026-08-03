@@ -1,5 +1,6 @@
 export { authService } from './auth.service';
 export { workerService } from './worker.service';
+export { verificationService } from './verification.service';
 export { serviceService } from './service.service';
 export { categoryService } from './category.service';
 export { bookingService } from './booking.service';

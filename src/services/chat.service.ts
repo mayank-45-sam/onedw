@@ -1,12 +1,20 @@
 import { api } from '@/lib/axios';
 import { API_ENDPOINTS } from '@/constants/api';
-import type { ChatMessage, Conversation, Paginated, User, Attachment } from '@/types';
+import type { ChatMessage, Conversation, Paginated, Attachment } from '@/types';
 
 export interface SendMessagePayload {
   text?: string;
   image?: string;
   voiceNote?: { url: string; duration: number };
   attachments?: Attachment[];
+}
+
+export interface ChatUserSearchResult {
+  _id: string;
+  name: string;
+  avatar?: string;
+  role: 'worker' | 'customer' | 'admin';
+  profession?: string;
 }
 
 export interface SearchConversationsResult {
@@ -45,13 +53,13 @@ export const chatService = {
   },
   markRead(conversationId: string) {
     return api
-      .post<{ read: true }>(API_ENDPOINTS.chat.markRead(conversationId))
+      .patch<{ read: true }>(API_ENDPOINTS.chat.markRead(conversationId))
       .then((r) => r.data);
   },
-  /** Search users to start a new conversation with. */
+  /** Search users to start a new conversation with. Returns user ids. */
   searchUsers(query: string) {
     return api
-      .get<Paginated<User>>(API_ENDPOINTS.workers.list, { params: { search: query, limit: 10 } })
+      .get<ChatUserSearchResult[]>(API_ENDPOINTS.users.search, { params: { q: query, limit: 10 } })
       .then((r) => r.data);
   },
 };

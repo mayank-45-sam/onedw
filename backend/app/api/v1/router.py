@@ -15,6 +15,11 @@ from app.api.v1.chat import router as chat_router
 from app.api.v1.coupons import router as coupons_router
 from app.api.v1.offers import router as offers_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.ai import router as ai_router
+from app.api.v1.image_analysis import router as image_analysis_router
+from app.api.v1.fraud import router as fraud_router
+from app.api.v1.verification import router as verification_router
+from app.api.v1.support import router as support_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -33,3 +38,8 @@ api_router.include_router(chat_router)
 api_router.include_router(coupons_router)
 api_router.include_router(offers_router)
 api_router.include_router(admin_router)
+api_router.include_router(ai_router)
+api_router.include_router(image_analysis_router)
+api_router.include_router(fraud_router)
+api_router.include_router(verification_router)
+api_router.include_router(support_router)

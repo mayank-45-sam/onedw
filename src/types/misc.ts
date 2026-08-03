@@ -3,7 +3,7 @@ export interface AppNotification {
   userId: string;
   title: string;
   body: string;
-  type: 'booking' | 'chat' | 'wallet' | 'system' | 'review' | 'offer';
+  type: 'booking' | 'chat' | 'wallet' | 'system' | 'review' | 'offer' | 'support';
   read: boolean;
   data?: Record<string, unknown>;
   createdAt: string;

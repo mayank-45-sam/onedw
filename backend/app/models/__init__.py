@@ -25,6 +25,16 @@ from app.models.worker_skill import WorkerSkill
 from app.models.worker_language import WorkerLanguage
 from app.models.refresh_token import RefreshToken
 from app.models.otp import OTP
+from app.models.ai_chat import ChatSession, ChatMessage
+from app.models.fraud import WorkerFraudData, FraudReport, SuspiciousActivity
+from app.models.image_analysis import ImageAnalysis
+from app.models.verification import (
+    WorkerVerification,
+    SkillTestSession,
+    PracticalAssessment,
+    VoiceInterview,
+    VerificationCertificate,
+)
 
 __all__ = [
     "BaseModel",
@@ -58,4 +68,15 @@ __all__ = [
     "WorkerLanguage",
     "RefreshToken",
     "OTP",
+    "ChatSession",
+    "ChatMessage",
+    "WorkerFraudData",
+    "FraudReport",
+    "SuspiciousActivity",
+    "ImageAnalysis",
+    "WorkerVerification",
+    "SkillTestSession",
+    "PracticalAssessment",
+    "VoiceInterview",
+    "VerificationCertificate",
 ]

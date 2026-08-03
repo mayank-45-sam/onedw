@@ -4,4 +4,5 @@ export const STORAGE_KEYS = {
   user: 'onedw_user',
   theme: 'onedw_theme',
   onboarding: 'onedw_onboarding',
+  workerVerified: 'onedw_worker_verified',
 } as const;

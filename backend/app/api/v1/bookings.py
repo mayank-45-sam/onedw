@@ -255,6 +255,53 @@ def update_booking_status(
 # REVIEWS
 # ============================================================
 
+@router.get(
+    "/reviews",
+    summary="Get recent reviews",
+)
+def get_reviews(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Get recent reviews across all workers (public)."""
+    from app.models.review import Review
+    from app.models.customer import Customer
+
+    query = db.query(Review).order_by(Review.created_at.desc())
+    total = query.count()
+    items = query.offset((page - 1) * limit).limit(limit).all()
+
+    data = []
+    for r in items:
+        cust = db.query(Customer).filter(Customer.id == r.customer_id).first()
+        data.append({
+            "id": r.id,
+            "booking_id": r.booking_id,
+            "customer_id": r.customer_id,
+            "worker_id": r.worker_id,
+            "rating": r.rating,
+            "behaviour": r.behaviour,
+            "quality": r.quality,
+            "price": r.price,
+            "comment": r.comment,
+            "work_images": r.work_images or [],
+            "recommends": r.recommends,
+            "customer": {"name": cust.name, "avatar": cust.avatar} if cust else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+
+    return {
+        "success": True,
+        "message": "Reviews retrieved successfully",
+        "data": data,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": (total + limit - 1) // limit if total > 0 else 0,
+    }
+
+
 @router.post(
     "/reviews",
     status_code=201,

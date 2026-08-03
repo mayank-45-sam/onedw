@@ -21,11 +21,11 @@ function getSnapshot() {
 }
 
 /**
- * Manages the singleton Socket.IO connection for the chat experience.
+ * Manages the singleton Socket.IO connection for real-time features.
  *
- * No backend is implemented in this project — the connection attempt is made
- * but failures are silent and the UI degrades gracefully to the REST API.
- * When a real Socket.IO server is available at API_BASE_URL, everything works.
+ * The backend exposes a Socket.IO server (JWT-authenticated, per-user rooms)
+ * mounted alongside the FastAPI app. If it is unreachable the connection
+ * attempt fails silently and the UI degrades gracefully to the REST API.
  */
 export function useSocket(autoConnect = true) {
   const token = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.token) : null;

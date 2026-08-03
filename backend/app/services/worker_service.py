@@ -17,6 +17,7 @@ class WorkerService:
         page: int = 1,
         limit: int = 20,
         category_id: Optional[str] = None,
+        search: Optional[str] = None,
         min_rating: Optional[float] = None,
         min_experience: Optional[int] = None,
         max_price: Optional[float] = None,
@@ -29,6 +30,7 @@ class WorkerService:
             skip=skip,
             limit=limit,
             category_id=category_id,
+            search=search,
             min_rating=min_rating,
             min_experience=min_experience,
             max_price=max_price,
@@ -53,6 +55,8 @@ class WorkerService:
         return self._serialize_detail(worker)
 
     def _serialize(self, worker) -> dict:
+        user = worker.user
+        from app.services.verification_service import serialize_worker_verification_brief
         return {
             "id": worker.id,
             "user_id": worker.user_id,
@@ -68,6 +72,11 @@ class WorkerService:
             "hourly_rate": worker.hourly_rate,
             "is_online": worker.is_online,
             "category_ids": worker.category_ids,
+            "aadhaar_verified": worker.aadhaar_verified,
+            "is_verified": user.is_verified if user else False,
+            "trust_score": worker.trust_score,
+            "verification_badge": worker.verification_badge,
+            "verification": serialize_worker_verification_brief(worker),
         }
 
     def _serialize_detail(self, worker) -> dict:

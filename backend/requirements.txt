@@ -26,3 +26,17 @@ loguru==0.7.2
 
 # Utilities
 python-dateutil==2.9.0.post0
+
+# AI / HTTP client
+httpx>=0.27.0,<1.0.0
+
+# Gemini Vision
+google-genai>=1.0.0
+
+# Certificate generation (PDF + QR code)
+reportlab==5.0.0
+qrcode[pil]==8.2
+Pillow==12.3.0
+
+# Real-time (WebSockets / Socket.IO)
+python-socketio==5.16.3

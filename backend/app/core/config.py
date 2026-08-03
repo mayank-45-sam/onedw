@@ -1,3 +1,4 @@
+import os
 from typing import List, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
@@ -5,7 +6,7 @@ from pydantic import Field, field_validator
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
@@ -69,8 +70,27 @@ class Settings(BaseSettings):
 
     # Socket.IO
     SOCKETIO_CORS_ORIGINS: List[str] = Field(
-        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
     )
+
+    # AI Chat
+    AI_API_KEY: str = Field(default="")
+    AI_MODEL: str = Field(default="openai/gpt-4o-mini")
+    AI_API_BASE_URL: str = Field(default="https://openrouter.ai/api/v1")
+    AI_MAX_TOKENS: int = Field(default=1024)
+    AI_RATE_LIMIT_PER_MINUTE: int = Field(default=10)
+
+    # Gemini Vision
+    GEMINI_API_KEY: str = Field(default="")
+    GEMINI_MODEL: str = Field(default="gemini-2.0-flash")
+
+    # Gemini Image generation (skill-test question images)
+    GEMINI_IMAGE_MODEL: str = Field(default="imagen-3.0-generate-002")
+    GEMINI_IMAGE_MAX_ATTEMPTS: int = Field(default=2)
+
+    # Groq Whisper (speech-to-text fallback for voice transcription)
+    GROQ_API_KEY: str = Field(default="")
+    GROQ_WHISPER_MODEL: str = Field(default="whisper-large-v3-turbo")
 
     @field_validator(
         "CORS_ORIGINS",

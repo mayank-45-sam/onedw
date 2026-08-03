@@ -35,11 +35,30 @@ export interface Worker extends BaseUser {
   certificates: { title: string; image: string; issuedAt?: string }[];
   coverImage?: string;
   isOnline: boolean;
+  aadhaarVerified: boolean;
+  trustScore?: number;
+  verificationBadge?: 'gold' | 'pro' | 'beginner' | 'rejected';
+  verification?: {
+    status: string;
+    adminStatus: string;
+    badge: 'gold' | 'pro' | 'beginner' | 'rejected' | null;
+    trustScore: number | null;
+    step: string | null;
+    submittedAt: string | null;
+    isDemo: boolean;
+  } | null;
   location?: {
     type: 'Point';
     coordinates: [number, number];
   };
   availability?: AvailabilitySlot[];
+  distanceKm?: number;
+  distance?: number;
+  responseTimeMinutes?: number;
+  etaMinutes?: number;
+  availabilityStatus?: 'available_now' | 'online' | 'offline';
+  aiScore?: number;
+  skillMatchScore?: number;
 }
 
 export interface Admin extends BaseUser {

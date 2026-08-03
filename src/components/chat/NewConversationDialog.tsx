@@ -59,7 +59,7 @@ export function NewConversationDialog({ open, onOpenChange }: NewConversationDia
     setInitialMessage('');
   };
 
-  const users = usersQuery.data?.data ?? [];
+  const users = usersQuery.data ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

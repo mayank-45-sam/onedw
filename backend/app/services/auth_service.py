@@ -39,9 +39,9 @@ class AuthService:
         phone: Optional[str] = None,
     ) -> dict:
         """Register a new user. Returns dict with user and tokens."""
-        if role in (UserRole.ADMIN, UserRole.WORKER):
+        if role == UserRole.ADMIN:
             raise ForbiddenException(
-                message="Self-registration is only available for customers",
+                message="Self-registration is only available for customers and workers",
                 code="FORBIDDEN",
             )
 
@@ -68,6 +68,8 @@ class AuthService:
             self.db.add(Customer(user_id=user.id, name=name))
         elif role == UserRole.ADMIN:
             self.db.add(Admin(user_id=user.id, name=name))
+        elif role == UserRole.WORKER:
+            self.db.add(Worker(user_id=user.id, name=name, profession="", hourly_rate=0.0))
 
         self.db.add(Wallet(user_id=user.id))
         self.db.commit()

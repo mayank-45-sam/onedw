@@ -31,6 +31,7 @@ export const queryKeys = {
     nearby: (lat: number, lng: number) => ['workers', 'nearby', lat, lng] as const,
     trending: ['workers', 'trending'] as const,
     recommended: (params?: Record<string, unknown>) => ['workers', 'recommended', params ?? {}] as const,
+    fastest: (params?: Record<string, unknown>) => ['workers', 'fastest', params ?? {}] as const,
     reviews: (id: string) => ['workers', 'reviews', id] as const,
   },
   bookings: {
@@ -39,6 +40,10 @@ export const queryKeys = {
     upcoming: ['bookings', 'upcoming'] as const,
     recent: ['bookings', 'recent'] as const,
     workerJobs: (params?: Record<string, unknown>) => ['bookings', 'worker', params ?? {}] as const,
+  },
+  verification: {
+    status: ['verification', 'status'] as const,
+    certificate: ['verification', 'certificate'] as const,
   },
   wallet: {
     detail: (userId?: string) => ['wallet', userId ?? 'me'] as const,
@@ -82,6 +87,11 @@ export const queryKeys = {
     workerApprovals: (params?: Record<string, unknown>) => ['admin', 'worker-approvals', params ?? {}] as const,
     complaints: (params?: Record<string, unknown>) => ['admin', 'complaints', params ?? {}] as const,
     refunds: (params?: Record<string, unknown>) => ['admin', 'refunds', params ?? {}] as const,
+    verification: {
+      stats: ['admin', 'verification', 'stats'] as const,
+      list: (params?: Record<string, unknown>) => ['admin', 'verification', 'list', params ?? {}] as const,
+      detail: (id: string) => ['admin', 'verification', 'detail', id] as const,
+    },
   },
 };
 

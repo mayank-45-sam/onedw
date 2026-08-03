@@ -1,21 +1,46 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { LifeBuoy, Mail, MessageSquare, Phone, Send, ChevronDown } from 'lucide-react';
-import { helpService } from '@/services/help.service';
-import { ApiError } from '@/lib/apiError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import { supportService } from '@/services/support.service';
+import { ApiError } from '@/lib/apiError';
+
+const scrollToContact = () => document.getElementById('contact-form')?.scrollIntoView({ behavior: 'smooth' });
+
+const SUPPORT_EMAIL = 'onedw@gmail.com';
+
+const copyEmail = async () => {
+  try {
+    await navigator.clipboard.writeText(SUPPORT_EMAIL);
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = SUPPORT_EMAIL;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+  toast.success(`${SUPPORT_EMAIL} copied to clipboard`);
+};
+
+const emailUs = () => {
+  copyEmail();
+  window.location.href = `mailto:${SUPPORT_EMAIL}`;
+};
 
 const SUPPORT_CHANNELS = [
-  { icon: MessageSquare, title: 'Live chat', description: 'Chat with our team 24/7', action: 'Start chat' },
-  { icon: Mail, title: 'Email us', description: 'support@onedw.app', action: 'Send email' },
-  { icon: Phone, title: 'Call us', description: '+1 800 555 0000', action: 'Call now' },
+  { icon: MessageSquare, title: 'Live chat', description: 'Chat with our team 24/7', action: 'Start chat', href: undefined, onClick: scrollToContact },
+  { icon: Mail, title: 'Email us', description: SUPPORT_EMAIL, action: 'Send email', href: `mailto:${SUPPORT_EMAIL}`, onClick: copyEmail },
+  { icon: Phone, title: 'Call us', description: '+1 800 555 0000', action: 'Call now', href: 'tel:+18005550000', onClick: undefined },
 ];
 
 export default function HelpCenterPage() {
@@ -25,11 +50,17 @@ export default function HelpCenterPage() {
   const onSubmit = form.handleSubmit(async (data) => {
     setSubmitting(true);
     try {
-      await helpService.contact(data);
-      toast.success('Message sent! We will get back to you soon.');
+      await supportService.contact({
+        name: data.name,
+        email: data.email,
+        subject: data.subject,
+        message: data.message,
+      });
+      toast.success('Message sent successfully! Our team will get back to you.');
       form.reset();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Could not send message.');
+      const msg = err instanceof ApiError ? err.message : 'Could not send your message. Please try again.';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -55,14 +86,20 @@ export default function HelpCenterPage() {
               </div>
               <h3 className="mt-3 font-semibold font-display">{c.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>
-              <Button variant="outline" size="sm" className="mt-4 rounded-full">{c.action}</Button>
+              <Button asChild variant="outline" size="sm" className="mt-4 rounded-full">
+                <a href={c.href} onClick={(e) => {
+                  if (c.href) e.preventDefault();
+                  if (c.onClick) c.onClick();
+                  if (c.href) window.location.href = c.href;
+                }}>{c.action}</a>
+              </Button>
             </motion.div>
           );
         })}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="card-premium p-6 md:p-8">
+        <div id="contact-form" className="card-premium p-6 md:p-8">
           <SectionHeader title="Send us a message" subtitle="We typically reply within a few hours." className="mb-6" />
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">

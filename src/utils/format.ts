@@ -1,6 +1,7 @@
 import { CURRENCY } from '@/constants/app';
 
-export function formatCurrency(amount: number, currency = CURRENCY.code) {
+export function formatCurrency(amount: number | null | undefined, currency = CURRENCY.code) {
+  if (amount == null) return 'N/A';
   return new Intl.NumberFormat(CURRENCY.locale, {
     style: 'currency',
     currency,
@@ -38,7 +39,8 @@ export function timeAgo(date: string | Date) {
   return formatDate(date);
 }
 
-export function initials(name: string) {
+export function initials(name: string | null | undefined) {
+  if (!name) return '??';
   return name
     .split(' ')
     .map((n) => n[0])

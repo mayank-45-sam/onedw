@@ -4,6 +4,7 @@ export * from './booking';
 export * from './review';
 export * from './wallet';
 export * from './misc';
+export * from './verification';
 
 import type { User } from './user';
 

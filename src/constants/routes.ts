@@ -25,12 +25,14 @@ export const ROUTES = {
   feedback: '/bookings/:id/feedback',
   profile: '/profile',
   settings: '/settings',
+  privacySecurity: '/settings/privacy',
   coupons: '/coupons',
   offers: '/offers',
   chat: '/chat',
   chatConversation: '/chat/:conversationId',
   // worker
   workerDashboard: '/worker/dashboard',
+  workerVerification: '/worker-verification',
   // admin
   adminDashboard: '/admin',
   adminBookings: '/admin/bookings',
@@ -41,9 +43,15 @@ export const ROUTES = {
   adminCoupons: '/admin/coupons',
   adminReports: '/admin/reports',
   adminAnalytics: '/admin/analytics',
+  adminVerification: '/admin/verification',
   workerApprovalQueue: '/admin/workers/approvals',
   complaintManagement: '/admin/complaints',
   refundRequests: '/admin/refunds',
+  adminFraudDashboard: '/admin/fraud',
+  adminFraudWorker: '/admin/fraud/:workerId',
+  // AI Image Repair
+  imageRepairResult: '/ai/repair-estimate',
+
   // 404
   notFound: '*',
 } as const;
@@ -60,6 +68,7 @@ export const PROTECTED_ROUTES = [
   ROUTES.adminCoupons,
   ROUTES.adminReports,
   ROUTES.adminAnalytics,
+  ROUTES.adminVerification,
   ROUTES.workerApprovalQueue,
   ROUTES.complaintManagement,
   ROUTES.refundRequests,
@@ -71,8 +80,11 @@ export const PROTECTED_ROUTES = [
   ROUTES.feedback,
   ROUTES.profile,
   ROUTES.settings,
+  ROUTES.privacySecurity,
   ROUTES.coupons,
   ROUTES.offers,
   ROUTES.chat,
   ROUTES.chatConversation,
+  ROUTES.adminFraudDashboard,
+  ROUTES.adminFraudWorker,
 ] as const;

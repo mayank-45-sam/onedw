@@ -13,6 +13,7 @@ from app.core.exceptions import (
     ForbiddenException,
 )
 from app.core.security import utc_now
+from app.core.socketio import emit_to_user
 
 
 VALID_STATUS_TRANSITIONS = {
@@ -101,6 +102,25 @@ class BookingService:
         self.db.commit()
         self.db.refresh(booking)
 
+        # Real-time: notify the assigned worker (and the customer) instantly.
+        if worker_id and worker is not None:
+            emit_to_user(
+                worker.user_id,
+                "booking:new",
+                {
+                    "booking": self._serialize_booking_detail(booking),
+                    "message": "You have a new booking request",
+                },
+            )
+        emit_to_user(
+            self._customer_user_id(booking, customer_id),
+            "booking:created",
+            {
+                "booking": self._serialize_booking_detail(booking),
+                "message": "Booking created — waiting for the worker to accept",
+            },
+        )
+
         return self._serialize_booking(booking)
 
     def get_booking(self, booking_id: str) -> dict:
@@ -180,7 +200,53 @@ class BookingService:
         self.db.commit()
         self.db.refresh(booking)
 
+        # Real-time: push the new status to both the customer and the worker.
+        recipients = set()
+        if booking.customer is not None:
+            recipients.add(booking.customer.user_id)
+        if booking.worker is not None:
+            recipients.add(booking.worker.user_id)
+        for uid in recipients:
+            emit_to_user(
+                uid,
+                "booking:updated",
+                {
+                    "booking": self._serialize_booking_detail(booking),
+                    "prev_status": current,
+                    "changed_by": user_role,
+                    "message": self._status_message(current, new_status, user_role, note),
+                },
+            )
+
         return self._serialize_booking_detail(booking)
+
+    def _customer_user_id(self, booking, customer_id: str) -> str:
+        if booking.customer is not None:
+            return booking.customer.user_id
+        customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
+        return customer.user_id if customer else ""
+
+    def _status_message(
+        self,
+        prev_status: str,
+        new_status: str,
+        changed_by: str,
+        note: Optional[str],
+    ) -> str:
+        labels = {
+            BookingStatus.ACCEPTED.value: "Your booking was accepted by the worker",
+            BookingStatus.WORKER_ASSIGNED.value: "A worker has been assigned to your booking",
+            BookingStatus.WORKER_ON_THE_WAY.value: "The worker is on the way",
+            BookingStatus.ARRIVED.value: "The worker has arrived",
+            BookingStatus.STARTED_WORK.value: "The worker has started the work",
+            BookingStatus.COMPLETED.value: "Your booking was completed",
+            BookingStatus.CANCELLED.value: (
+                "The worker rejected this request"
+                if changed_by == "worker"
+                else "This booking was cancelled"
+            ),
+        }
+        return labels.get(new_status, f"Booking status updated to '{new_status}'")
 
     def _serialize_booking(self, b) -> dict:
         payment_status = b.payment_status.value if hasattr(b.payment_status, "value") else b.payment_status

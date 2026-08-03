@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export const API_PREFIX = '/api/v1';
 
 export const API_ENDPOINTS = {
@@ -19,8 +19,26 @@ export const API_ENDPOINTS = {
     nearby: '/workers/nearby',
     trending: '/workers/trending',
     recommended: '/workers/recommended',
+    fastest: '/workers/fastest',
     reviews: (id: string) => `/workers/${id}/reviews`,
     favorite: (id: string) => `/workers/${id}/favorite`,
+    aadhaarSubmit: '/workers/aadhaar/submit',
+    aadhaarVerify: '/workers/aadhaar/verify',
+    aadhaarStatus: '/workers/aadhaar/status',
+  },
+  verification: {
+    status: '/verification/status',
+    start: '/verification/start',
+    documents: '/verification/documents',
+    skillTestGenerate: '/verification/skill-test/generate',
+    skillTestSubmit: '/verification/skill-test/submit',
+    practicalSubmit: '/verification/practical/submit',
+    interviewStart: '/verification/interview/start',
+    interviewRespond: '/verification/interview/respond',
+    transcribe: '/verification/interview/transcribe',
+    complete: '/verification/complete',
+    certificate: '/verification/certificate',
+    verify: (certificateNo: string) => `/verification/verify/${certificateNo}`,
   },
   services: {
     list: '/services',
@@ -33,19 +51,17 @@ export const API_ENDPOINTS = {
     detail: (id: string) => `/categories/${id}`,
   },
   bookings: {
-    list: '/bookings',
+    list: '/bookings/my-bookings',
     detail: (id: string) => `/bookings/${id}`,
     create: '/bookings',
-    update: (id: string) => `/bookings/${id}`,
-    cancel: (id: string) => `/bookings/${id}/cancel`,
-    remove: (id: string) => `/bookings/${id}`,
+    updateStatus: (id: string) => `/bookings/${id}/status`,
     upcoming: '/bookings/upcoming',
     recent: '/bookings/recent',
   },
   reviews: {
-    list: '/reviews',
+    listAll: '/reviews',
+    list: (workerId: string) => `/reviews/worker/${workerId}`,
     create: '/reviews',
-    detail: (id: string) => `/reviews/${id}`,
   },
   wallet: {
     detail: '/wallet',
@@ -58,6 +74,9 @@ export const API_ENDPOINTS = {
     markRead: (id: string) => `/notifications/${id}/read`,
     markAllRead: '/notifications/read-all',
     remove: (id: string) => `/notifications/${id}`,
+  },
+  users: {
+    search: '/users/search',
   },
   chat: {
     conversations: '/chat/conversations',
@@ -93,10 +112,21 @@ export const API_ENDPOINTS = {
     workerApprovals: '/admin/workers/approvals',
     approveWorker: (id: string) => `/admin/workers/${id}/approve`,
     rejectWorker: (id: string) => `/admin/workers/${id}/reject`,
+    workerAadhaarStatus: (id: string) => `/admin/workers/${id}/aadhaar/status`,
+    verifyAadhaar: (id: string) => `/admin/workers/${id}/aadhaar/verify`,
+    rejectAadhaar: (id: string) => `/admin/workers/${id}/aadhaar/reject`,
     complaints: '/admin/complaints',
     complaint: (id: string) => `/admin/complaints/${id}`,
     refunds: '/admin/refunds',
     refund: (id: string) => `/admin/refunds/${id}`,
+    verificationStats: '/admin/verification/stats',
+    verifications: '/admin/verification',
+    verificationDetail: (id: string) => `/admin/verification/${id}`,
+    approveVerification: (id: string) => `/admin/verification/${id}/approve`,
+    rejectVerification: (id: string) => `/admin/verification/${id}/reject`,
+    verificationNotes: (id: string) => `/admin/verification/${id}/notes`,
+    verificationRetake: (id: string) => `/admin/verification/${id}/retake`,
+    verificationDemoLoad: '/admin/verification/demo/load',
   },
   search: {
     query: '/search',
@@ -111,4 +141,25 @@ export const API_ENDPOINTS = {
   profile: '/users/update-profile',
   faq: '/faq',
   help: '/help',
+  ai: {
+    chat: '/ai/chat',
+    history: '/ai/history',
+    sessionMessages: (sessionId: string) => `/ai/history/${sessionId}`,
+    deleteSession: (sessionId: string) => `/ai/history/${sessionId}`,
+    serviceAssistant: '/ai/service-assistant',
+    transcribe: '/ai/transcribe',
+  },
+  fraud: {
+    analyze: '/fraud/analyze',
+    report: (workerId: string) => `/fraud/report/${workerId}`,
+    highRisk: '/fraud/high-risk',
+    status: (workerId: string) => `/fraud/status/${workerId}`,
+  },
+  imageAnalysis: {
+    analyze: '/ai/image-analysis',
+    history: '/ai/image-analysis/history',
+  },
+  support: {
+    contact: '/support/contact',
+  },
 } as const;

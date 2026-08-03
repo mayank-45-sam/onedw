@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDuration } from '@/utils/format';
-import { getServiceGradient, getServiceIcon, getServiceCategorySlug } from '@/utils/serviceImages';
+import { getServiceImage } from '@/utils/serviceImages';
 import type { Service } from '@/types';
 
 interface ServiceCardProps {
@@ -30,9 +30,9 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
     onToggleFavorite?.(service._id);
   };
 
-  const slug = getServiceCategorySlug(service);
-  const gradient = getServiceGradient(service, index);
-  const Icon = getServiceIcon(slug);
+  const primaryImage = service.image;
+  const fallbackImage = getServiceImage(service);
+  const displayImage = primaryImage && !imgError ? primaryImage : fallbackImage;
 
   return (
     <motion.div
@@ -45,23 +45,21 @@ export function ServiceCard({ service, index = 0, onToggleFavorite }: ServiceCar
         className="card-premium card-premium-hover group flex h-full flex-col overflow-hidden p-0"
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-          {service.image && !imgError ? (
-            <>
-              {!imgLoaded && <div className="absolute inset-0 shimmer" />}
-              <img
-                src={service.image}
-                alt={service.name}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                loading="lazy"
-                onLoad={() => setImgLoaded(true)}
-                onError={() => setImgError(true)}
-              />
-            </>
-          ) : (
-            <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradient}`}>
-              <Icon className="h-16 w-16 text-white/80 drop-shadow-sm" />
-            </div>
-          )}
+          {!imgLoaded && <div className="absolute inset-0 shimmer" />}
+          <img
+            src={displayImage}
+            alt={service.name}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => {
+              if (!imgError) {
+                setImgError(true);
+              } else {
+                setImgLoaded(true);
+              }
+            }}
+          />
           <div className="absolute left-3 top-3 flex gap-2">
             {service.popular && <Badge className="bg-primary text-primary-foreground">Popular</Badge>}
             {service.trending && <Badge className="bg-accent text-accent-foreground">Trending</Badge>}

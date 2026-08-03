@@ -56,6 +56,17 @@ backend/uploads/
 test_*.json
 test_*.py
 
+# Logs
+*.log
+/logs/
+backend/tests/run
+
+# Uploads
+/uploads/
+
+# Misc
+1000091230.jpg
+
 # IDE
 .vscode/settings.json
 .idea/

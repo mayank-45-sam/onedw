@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { registerSchema, type RegisterFormData } from '@/utils/validation';
 import { ApiError } from '@/lib/apiError';
 import { ROUTES } from '@/constants/routes';
+import { STORAGE_KEYS } from '@/constants/storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,7 +35,12 @@ export default function RegisterPage() {
       void confirmPassword; void acceptTerms;
       const user = await registerUser(payload);
       toast.success(`Welcome, ${user.name.split(' ')[0]}!`);
-      navigate(user.role === 'worker' ? ROUTES.workerDashboard : ROUTES.customerDashboard);
+      if (user.role === 'worker') {
+        localStorage.removeItem(STORAGE_KEYS.workerVerified);
+        navigate(ROUTES.workerVerification);
+      } else {
+        navigate(ROUTES.customerDashboard);
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Registration failed. Please try again.';
       toast.error(msg);

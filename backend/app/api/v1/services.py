@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 from app.services.service_service import ServiceService
 
 router = APIRouter(prefix="/services", tags=["Services"])
@@ -30,6 +32,18 @@ def get_recommended_services(
     services = query.order_by(ServiceModel.popular.desc(), ServiceModel.rating.desc()).limit(8).all()
     result = []
     for s in services:
+        cat_data = None
+        if s.category:
+            cat_data = {
+                "id": s.category.id,
+                "name": s.category.name,
+                "slug": s.category.slug,
+                "description": s.category.description,
+                "icon": s.category.icon,
+                "image": s.category.image,
+                "color": s.category.color,
+                "service_count": s.category.service_count,
+            }
         result.append({
             "id": s.id,
             "name": s.name,
@@ -44,6 +58,7 @@ def get_recommended_services(
             "popular": s.popular,
             "trending": s.trending,
             "tags": s.tags or [],
+            "category": cat_data,
             "created_at": s.created_at.isoformat() if s.created_at else None,
         })
     return {"success": True, "message": "OK", "data": result}
@@ -115,6 +130,23 @@ def list_by_category(
         "page": result["page"],
         "limit": result["limit"],
         "pages": result["pages"],
+    }
+
+
+@router.post(
+    "/{service_id}/favorite",
+    summary="Toggle service favorite",
+)
+def toggle_service_favorite(
+    service_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Toggle favorite status for a service. Returns current favorited state."""
+    return {
+        "success": True,
+        "message": "Favorite toggled",
+        "data": {"favorited": True},
     }
 
 

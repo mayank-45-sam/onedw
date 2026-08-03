@@ -7,7 +7,7 @@ import { ArrowLeft, Phone, Video, Send } from 'lucide-react';
 import { chatService, type SendMessagePayload } from '@/services/chat.service';
 import { queryKeys } from '@/lib/queryClient';
 import { ApiError } from '@/lib/apiError';
-import { useSocket, usePresence, useTyping } from '@/hooks/useSocket';
+import { useSocket, usePresence, useTyping, useSocketEvent } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -34,6 +34,7 @@ export default function ChatPage() {
   const { status: socketStatus } = useSocket(true);
   const { onlineUsers } = usePresence();
   const { isTyping, typingUserIds, emitTyping } = useTyping(conversationId);
+  const { data: liveMessage } = useSocketEvent<{ conversationId: string; message: ChatMessage }>('chat:message');
 
   const conversations = useQuery({ queryKey: queryKeys.chat.conversations, queryFn: () => chatService.conversations() });
   const messages = useQuery({
@@ -66,6 +67,15 @@ export default function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, messages.data?.data?.length]);
+
+  // Live updates: a new message arrived over the socket (sent by us or the other side).
+  useEffect(() => {
+    if (!liveMessage) return;
+    qc.invalidateQueries({ queryKey: queryKeys.chat.conversations });
+    if (liveMessage.conversationId === conversationId) {
+      qc.invalidateQueries({ queryKey: queryKeys.chat.messages(conversationId) });
+    }
+  }, [liveMessage, qc, conversationId]);
 
   const activeConversation = conversations.data?.find((c) => c._id === conversationId);
   const otherUser = activeConversation?.participants?.[0];

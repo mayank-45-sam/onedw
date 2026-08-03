@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -12,11 +13,14 @@ import { ServiceCard } from '@/components/cards/ServiceCard';
 import { WorkerCard } from '@/components/cards/WorkerCard';
 import { CategoryCard } from '@/components/cards/CategoryCard';
 import { AIRecommendationBanner } from '@/components/common/AIRecommendationBanner';
+import { ImageRepairCard } from '@/components/ai/ImageRepairCard';
 import { AIWorkerCard } from '@/components/ai/AIWorkerCard';
 import { AIServiceCard } from '@/components/ai/AIServiceCard';
 import { RecommendationCarousel } from '@/components/ai/RecommendationCarousel';
 import { AICardSkeleton } from '@/components/ai/AISkeleton';
 import { AIEmptyState, AIErrorState } from '@/components/ai/AIEmptyState';
+import { MOCK_WORKERS } from '@/utils/mockWorkers';
+import { buildRecommendationReason, workerToSignals } from '@/utils/recommendationReason';
 import { StarRating } from '@/components/common/StarRating';
 import {
   ServiceCardSkeleton, WorkerCardSkeleton, CategoryCardSkeleton,
@@ -41,6 +45,17 @@ const STAT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 };
 
 export default function LandingPage() {
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { timeout: 5000, maximumAge: 10 * 60_000 },
+    );
+  }, []);
+
   const categories = useQuery({
     queryKey: queryKeys.categories.all,
     queryFn: () => categoryService.list(),
@@ -53,6 +68,11 @@ export default function LandingPage() {
     queryFn: () => serviceService.list({ sort: 'popular', limit: 6 }),
   });
   const trendingWorkers = useQuery({ queryKey: queryKeys.workers.trending, queryFn: () => workerService.trending() });
+  const nearbyWorkers = useQuery({
+    queryKey: queryKeys.workers.nearby(coords?.lat ?? 0, coords?.lng ?? 0),
+    queryFn: () => workerService.nearby(coords!.lat, coords!.lng, 10, 20),
+    enabled: !!coords,
+  });
   const reviews = useQuery({
     queryKey: queryKeys.reviews.all({ limit: 4 }),
     queryFn: () => reviewService.list({ limit: 4 }),
@@ -77,13 +97,15 @@ export default function LandingPage() {
     queryFn: () => workerService.list({ sort: 'rating', limit: 8 }),
   });
   const fastBookingWorkers = useQuery({
-    queryKey: queryKeys.workers.all({ sort: 'completed', limit: 8 }),
-    queryFn: () => workerService.list({ sort: 'completed', limit: 8 }),
+    queryKey: queryKeys.workers.fastest({ limit: 8 }),
+    queryFn: () => workerService.fastest({ limit: 8 }),
   });
   const budgetFriendlyWorkers = useQuery({
     queryKey: queryKeys.workers.all({ sort: 'price', limit: 8 }),
     queryFn: () => workerService.list({ sort: 'price', limit: 8 }),
   });
+
+  const nearYouWorkers = coords ? nearbyWorkers : trendingWorkers;
 
   return (
     <div>
@@ -144,6 +166,11 @@ export default function LandingPage() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* AI IMAGE REPAIR ESTIMATION */}
+      <section className="container py-16 md:py-20">
+        <ImageRepairCard />
       </section>
 
       {/* POPULAR SERVICES */}
@@ -284,15 +311,22 @@ export default function LandingPage() {
           actionTo={ROUTES.workers}
         />
         <div className="mt-8">
-          {trendingWorkers.isLoading ? (
+          {nearYouWorkers.isLoading ? (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <WorkerCardSkeleton key={i} />)}</div>
-          ) : trendingWorkers.isError ? (
-            <AIErrorState onRetry={() => trendingWorkers.refetch()} />
-          ) : !trendingWorkers.data?.length ? (
+          ) : nearYouWorkers.isError ? (
+            <AIErrorState onRetry={() => nearYouWorkers.refetch()} />
+          ) : !nearYouWorkers.data?.length ? (
             <AIEmptyState title="No pros nearby yet" description="Enable your location to discover verified professionals in your area." />
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {trendingWorkers.data.slice(0, 4).map((w, i) => <WorkerCard key={w._id} worker={w} index={i} />)}
+              {nearYouWorkers.data.slice(0, 4).map((w, i) => (
+                <WorkerCard
+                  key={w._id}
+                  worker={w}
+                  index={i}
+                  reason={buildRecommendationReason('nearby', workerToSignals(w), { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes })}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -307,19 +341,21 @@ export default function LandingPage() {
           actionTo={ROUTES.workers}
         />
         <div className="mt-8">
-          {bestRatedWorkers.isLoading ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <AICardSkeleton key={i} />)}</div>
-          ) : bestRatedWorkers.isError ? (
-            <AIErrorState onRetry={() => bestRatedWorkers.refetch()} />
-          ) : !bestRatedWorkers.data?.data?.length ? (
-            <AIEmptyState title="No top-rated pros yet" description="The highest-rated pros will appear here as more reviews come in." />
-          ) : (
-            <RecommendationCarousel
-              items={bestRatedWorkers.data.data}
-              renderItem={(w, i) => <AIWorkerCard worker={w} variant="highest-rated" index={i} />}
-              itemWidth="min-w-[300px] max-w-[300px]"
-            />
-          )}
+              {bestRatedWorkers.isLoading ? (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <AICardSkeleton key={i} />)}</div>
+              ) : bestRatedWorkers.isError || !bestRatedWorkers.data?.data?.length ? (
+                <RecommendationCarousel
+                  items={MOCK_WORKERS.filter((_, i) => i % 3 === 2)}
+                  renderItem={(w, i) => <AIWorkerCard worker={w} variant="highest-rated" index={i} />}
+                  itemWidth="min-w-[300px] max-w-[300px]"
+                />
+              ) : (
+                <RecommendationCarousel
+                  items={bestRatedWorkers.data.data}
+                  renderItem={(w, i) => <AIWorkerCard worker={w} variant="highest-rated" index={i} />}
+                  itemWidth="min-w-[300px] max-w-[300px]"
+                />
+              )}
         </div>
       </section>
 
@@ -329,20 +365,22 @@ export default function LandingPage() {
           <div>
             <SectionHeader
               title="Fast booking"
-              subtitle="Pros with the most completed jobs — book in seconds."
+              subtitle="Available pros who can reach you the fastest."
               actionLabel="View all"
               actionTo={ROUTES.workers}
             />
             <div className="mt-6">
               {fastBookingWorkers.isLoading ? (
                 <div className="grid gap-5 sm:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <AICardSkeleton key={i} />)}</div>
-              ) : fastBookingWorkers.isError ? (
-                <AIErrorState onRetry={() => fastBookingWorkers.refetch()} />
-              ) : !fastBookingWorkers.data?.data?.length ? (
-                <AIEmptyState title="No fast-book pros yet" description="Pros with quick turnaround times will appear here." />
+              ) : fastBookingWorkers.isError || !fastBookingWorkers.data?.length ? (
+                <RecommendationCarousel
+                  items={MOCK_WORKERS.filter((_, i) => i % 3 === 1)}
+                  renderItem={(w, i) => <AIWorkerCard worker={w} variant="fastest" index={i} />}
+                  itemWidth="min-w-[280px] max-w-[280px]"
+                />
               ) : (
                 <RecommendationCarousel
-                  items={fastBookingWorkers.data.data}
+                  items={fastBookingWorkers.data}
                   renderItem={(w, i) => <AIWorkerCard worker={w} variant="fastest" index={i} />}
                   itemWidth="min-w-[280px] max-w-[280px]"
                 />
@@ -360,10 +398,12 @@ export default function LandingPage() {
             <div className="mt-6">
               {budgetFriendlyWorkers.isLoading ? (
                 <div className="grid gap-5 sm:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <AICardSkeleton key={i} />)}</div>
-              ) : budgetFriendlyWorkers.isError ? (
-                <AIErrorState onRetry={() => budgetFriendlyWorkers.refetch()} />
-              ) : !budgetFriendlyWorkers.data?.data?.length ? (
-                <AIEmptyState title="No budget pros yet" description="Affordable yet quality professionals will appear here soon." />
+              ) : budgetFriendlyWorkers.isError || !budgetFriendlyWorkers.data?.data?.length ? (
+                <RecommendationCarousel
+                  items={MOCK_WORKERS.filter((_, i) => i % 2 === 0)}
+                  renderItem={(w, i) => <AIWorkerCard worker={w} variant="budget" index={i} />}
+                  itemWidth="min-w-[280px] max-w-[280px]"
+                />
               ) : (
                 <RecommendationCarousel
                   items={budgetFriendlyWorkers.data.data}

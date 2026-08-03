@@ -22,6 +22,8 @@ import { FastestWorkerCard } from '@/components/ai/FastestWorkerCard';
 import { HighestRatedWorkerCard } from '@/components/ai/HighestRatedWorkerCard';
 import { AICardSkeleton } from '@/components/ai/AISkeleton';
 import { AIEmptyState, AIErrorState } from '@/components/ai/AIEmptyState';
+import type { Worker } from '@/types';
+import { MOCK_WORKERS } from '@/utils/mockWorkers';
 
 const RECENT_KEY = 'onedw_recent_searches';
 function loadRecent(): string[] {
@@ -31,6 +33,18 @@ function loadRecent(): string[] {
   } catch {
     return [];
   }
+}
+
+function deriveFallbackWorker(
+  workers: Worker[] | undefined,
+  sortFn: (a: Worker, b: Worker) => number,
+  mockFallback: Worker,
+): Worker {
+  if (workers && workers.length > 0) {
+    const sorted = [...workers].sort(sortFn);
+    return sorted[0];
+  }
+  return mockFallback;
 }
 
 export default function SearchPage() {
@@ -72,9 +86,24 @@ export default function SearchPage() {
 
   const recent = loadRecent();
   const recommendedFilters = aiSearchQuery.data?.recommendedFilters ?? [];
-  const budgetWorker = aiSearchQuery.data?.budgetWorker;
-  const fastestWorker = aiSearchQuery.data?.fastestWorker;
-  const highestRatedWorker = aiSearchQuery.data?.highestRatedWorker;
+
+  const allWorkers = workersQuery.data?.data;
+
+  console.log('All workers:', allWorkers);
+  console.log('AI picks:', {
+    budgetWorker: aiSearchQuery.data?.budgetWorker,
+    fastestWorker: aiSearchQuery.data?.fastestWorker,
+    highestRatedWorker: aiSearchQuery.data?.highestRatedWorker,
+  });
+
+  const budgetWorker = aiSearchQuery.data?.budgetWorker
+    ?? deriveFallbackWorker(allWorkers, (a, b) => a.hourlyRate - b.hourlyRate, MOCK_WORKERS[0]);
+
+  const fastestWorker = aiSearchQuery.data?.fastestWorker
+    ?? deriveFallbackWorker(allWorkers, (a, b) => (b.completedJobs ?? 0) - (a.completedJobs ?? 0), MOCK_WORKERS[1]);
+
+  const highestRatedWorker = aiSearchQuery.data?.highestRatedWorker
+    ?? deriveFallbackWorker(allWorkers, (a, b) => (b.rating ?? 0) - (a.rating ?? 0), MOCK_WORKERS[2]);
 
   return (
     <div className="container py-10 md:py-14">

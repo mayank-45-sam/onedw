@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { Wrench, Search, Trash2, Loader2, Star, BadgeCheck, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Wrench, Search, Trash2, Loader2, Star, BadgeCheck, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { queryKeys } from '@/lib/queryClient';
 import { ApiError } from '@/lib/apiError';
@@ -90,7 +90,7 @@ export default function AdminWorkersPage() {
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/40">
                   <tr>
-                    {['Worker', 'Profession', 'Rating', 'Jobs', 'Rate', 'Online', 'Verified', 'Actions'].map((h) => (
+                    {['Worker', 'Profession', 'Rating', 'Jobs', 'Rate', 'Online', 'Aadhaar', 'Verified', 'Actions'].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {h}
                       </th>
@@ -138,6 +138,12 @@ export default function AdminWorkersPage() {
                             : <ToggleLeft className="h-5 w-5 text-muted-foreground" />
                           }
                         </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        {w.aadhaarVerified
+                          ? <ShieldCheck className="h-4 w-4 text-success" />
+                          : <span className="text-xs text-muted-foreground">—</span>
+                        }
                       </td>
                       <td className="px-4 py-3">
                         {w.isVerified

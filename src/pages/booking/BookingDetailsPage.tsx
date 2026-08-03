@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   ChevronLeft, MapPin, Calendar, Clock, CreditCard, Star, MessageSquare,
@@ -8,6 +9,8 @@ import {
 import { bookingService } from '@/services/booking.service';
 import { queryKeys } from '@/lib/queryClient';
 import { ApiError } from '@/lib/apiError';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSocketEvent } from '@/hooks/useSocket';
 import { MapView } from '@/components/common/MapView';
 import { LoadingState, ErrorState, EmptyState } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
@@ -18,11 +21,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { useState } from 'react';
 import { formatCurrency, formatDate, initials } from '@/utils/format';
 import { ROUTES } from '@/constants/routes';
 import { cn } from '@/lib/utils';
 import type { BookingStatus, PaymentStatus } from '@/types';
+import type { BookingSocketEvent } from '@/types/realtime';
 
 const STATUS_FLOW: { status: BookingStatus; label: string }[] = [
   { status: 'pending',         label: 'Pending' },
@@ -45,6 +48,7 @@ export default function BookingDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [cancelReason, setCancelReason] = useState('');
 
   const bookingQuery = useQuery({
@@ -52,6 +56,17 @@ export default function BookingDetailsPage() {
     queryFn: () => bookingService.detail(id!),
     enabled: !!id,
   });
+
+  const updatedEvent = useSocketEvent<BookingSocketEvent>('booking:updated');
+  useEffect(() => {
+    if (!updatedEvent.data || !id) return;
+    if (updatedEvent.data.booking?._id !== id) return;
+    qc.invalidateQueries({ queryKey: queryKeys.bookings.detail(id) });
+    qc.invalidateQueries({ queryKey: ['bookings'] });
+    if (user?.role === 'customer' && updatedEvent.data.message) {
+      toast(updatedEvent.data.message);
+    }
+  }, [updatedEvent.data, id, qc, user?.role]);
 
   const cancelMutation = useMutation({
     mutationFn: () => bookingService.cancel(id!, cancelReason),

@@ -2,6 +2,7 @@ from typing import Optional
 from pydantic import Field
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.db.database import get_db
 from app.dependencies.auth import get_current_user
@@ -9,7 +10,8 @@ from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.common import SchemaBase
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, BadRequestException
+from app.core.socketio import emit_to_user
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -21,16 +23,27 @@ class NewConversationRequest(SchemaBase):
 class SendMessageRequest(SchemaBase):
     text: Optional[str] = None
     image: Optional[str] = None
+    voice_note: Optional[dict] = None
+    attachments: Optional[list] = None
 
 
-def _serialize_conversation(c: Conversation, current_user_id: str) -> dict:
+def _user_info(db: Session, user_id: str) -> dict:
+    """Build the lightweight participant object the frontend renders."""
+    user = db.get(User, user_id)
+    if user is None:
+        return {"id": user_id, "name": "User", "avatar": None, "role": None, "profession": None}
+
+    profile = (
+        user.customer_profile
+        or user.worker_profile
+        or user.admin_profile
+    )
     return {
-        "id": c.id,
-        "participants": c.participants or [],
-        "last_message_id": c.last_message_id,
-        "unread_count": c.unread_count,
-        "created_at": c.created_at.isoformat() if c.created_at else None,
-        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+        "id": user.id,
+        "name": profile.name if profile else user.email,
+        "avatar": profile.avatar if profile else None,
+        "role": user.role.value if user.role else None,
+        "profession": user.worker_profile.profession if user.worker_profile else None,
     }
 
 
@@ -49,6 +62,26 @@ def _serialize_message(m: Message) -> dict:
     }
 
 
+def _serialize_conversation(c: Conversation, db: Session, current_user_id: str) -> dict:
+    last_message = None
+    if c.last_message_id:
+        m = db.get(Message, c.last_message_id)
+        if m is not None:
+            last_message = _serialize_message(m)
+
+    return {
+        "id": c.id,
+        "participants": [
+            _user_info(db, pid) for pid in (c.participants or [])
+            if pid != current_user_id
+        ],
+        "last_message": last_message,
+        "unread_count": c.unread_count,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }
+
+
 @router.get("/conversations", summary="List conversations")
 def list_conversations(
     current_user: User = Depends(get_current_user),
@@ -60,7 +93,7 @@ def list_conversations(
     return {
         "success": True,
         "message": "Conversations retrieved",
-        "data": [_serialize_conversation(c, current_user.id) for c in convos],
+        "data": [_serialize_conversation(c, db, current_user.id) for c in convos],
     }
 
 
@@ -70,17 +103,24 @@ def create_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if body.participant_id == current_user.id:
+        raise BadRequestException(message="Cannot start a conversation with yourself")
+
+    target = db.get(User, body.participant_id)
+    if target is None or not target.is_active:
+        raise NotFoundException(message="User not found")
+
     existing = db.query(Conversation).filter(
         Conversation.participants.op("LIKE")(f"%{current_user.id}%"),
         Conversation.participants.op("LIKE")(f"%{body.participant_id}%"),
     ).first()
     if existing:
-        return {"success": True, "message": "Conversation exists", "data": _serialize_conversation(existing, current_user.id)}
+        return {"success": True, "message": "Conversation exists", "data": _serialize_conversation(existing, db, current_user.id)}
     convo = Conversation(participants=[current_user.id, body.participant_id])
     db.add(convo)
     db.commit()
     db.refresh(convo)
-    return {"success": True, "message": "Conversation created", "data": _serialize_conversation(convo, current_user.id)}
+    return {"success": True, "message": "Conversation created", "data": _serialize_conversation(convo, db, current_user.id)}
 
 
 @router.get("/conversations/{conversation_id}/messages", summary="Get messages")
@@ -128,11 +168,20 @@ def send_message(
         receiver_id=receiver_id[0],
         text=body.text,
         image=body.image,
+        voice_note=body.voice_note,
+        attachments=body.attachments or [],
     )
     db.add(msg)
-    convo.last_message_id = None
+    db.flush()
+    convo.last_message_id = msg.id
+    convo.unread_count = (convo.unread_count or 0) + 1
+    convo.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(msg)
+    payload = {"conversation_id": conversation_id, "message": _serialize_message(msg)}
+    if receiver_id[0] != current_user.id:
+        emit_to_user(receiver_id[0], "chat:message", payload)
+    emit_to_user(current_user.id, "chat:message", payload)
     return {"success": True, "message": "Message sent", "data": _serialize_message(msg)}
 
 
@@ -159,4 +208,4 @@ def search_conversations(
     convos = db.query(Conversation).filter(
         Conversation.participants.op("LIKE")(f"%{current_user.id}%")
     ).all()
-    return {"success": True, "message": "OK", "data": [_serialize_conversation(c, current_user.id) for c in convos]}
+    return {"success": True, "message": "OK", "data": [_serialize_conversation(c, db, current_user.id) for c in convos]}

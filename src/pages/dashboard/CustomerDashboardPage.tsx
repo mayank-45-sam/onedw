@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -9,6 +10,7 @@ import { workerService } from '@/services/worker.service';
 import { serviceService } from '@/services/service.service';
 import { walletService } from '@/services/wallet.service';
 import { searchService } from '@/services/search.service';
+import { useSocketEvent } from '@/hooks/useSocket';
 import { queryKeys } from '@/lib/queryClient';
 import { BookingCard } from '@/components/cards/BookingCard';
 import { WorkerCard } from '@/components/cards/WorkerCard';
@@ -25,14 +27,29 @@ import { AIEmptyState, AIErrorState } from '@/components/ai/AIEmptyState';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants/routes';
 import { formatCurrency } from '@/utils/format';
+import type { BookingSocketEvent } from '@/types/realtime';
 
 export default function CustomerDashboardPage() {
+  const qc = useQueryClient();
   const upcoming = useQuery({ queryKey: queryKeys.bookings.upcoming, queryFn: () => bookingService.upcoming() });
   const recent = useQuery({ queryKey: queryKeys.bookings.recent, queryFn: () => bookingService.recent() });
   const wallet = useQuery({ queryKey: queryKeys.wallet.detail(), queryFn: () => walletService.detail() });
   const recommendedWorkers = useQuery({ queryKey: queryKeys.workers.recommended({}), queryFn: () => workerService.recommended({}) });
   const recommendedServices = useQuery({ queryKey: queryKeys.services.recommended({}), queryFn: () => serviceService.recommended({}) });
   const recentlyViewed = useQuery({ queryKey: queryKeys.search.recentlyViewed, queryFn: () => searchService.recentlyViewed() });
+
+  const invalidateBookings = useCallback(() => {
+    qc.invalidateQueries({ queryKey: queryKeys.bookings.upcoming });
+    qc.invalidateQueries({ queryKey: queryKeys.bookings.recent });
+    qc.invalidateQueries({ queryKey: ['bookings'] });
+  }, [qc]);
+
+  const createdEvent = useSocketEvent<BookingSocketEvent>('booking:created');
+  const updatedEvent = useSocketEvent<BookingSocketEvent>('booking:updated');
+  useEffect(() => {
+    if (!createdEvent.data && !updatedEvent.data) return;
+    invalidateBookings();
+  }, [createdEvent.data, updatedEvent.data, invalidateBookings]);
 
   const stats = [
     { label: 'Upcoming', value: upcoming.data?.length ?? 0, icon: Calendar, to: ROUTES.booking, color: 'text-primary' },

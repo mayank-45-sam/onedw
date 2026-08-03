@@ -20,13 +20,182 @@ from loguru import logger
 from app.db.database import init_db, SessionLocal
 from app.core.config import settings
 
+_U = "https://images.unsplash.com"
+_Q = "w=400&h=300&fit=crop&q=80"
+
 
 def _ensure_upload_dirs():
     """Create all upload subdirectories so static mount never fails."""
-    folders = ["profile", "problem", "portfolio", "certificate", "service", "category", "general", "avatars"]
+    folders = ["profile", "problem", "portfolio", "certificate", "service", "category", "general", "avatars",
+               "verification", "assessment", "voice", "certificates"]
     base = Path(settings.UPLOAD_DIR)
     for f in folders:
         (base / f).mkdir(parents=True, exist_ok=True)
+
+
+SERVICE_IMAGE_MAP = {
+    # ── Plumbing ──
+    "Pipe Repair":            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+    "Drain Cleaning":         f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
+    "Faucet Installation":    f"{_U}/photo-1584622650111-993a426fbf0a?{_Q}",
+    "Toilet Repair":          f"{_U}/photo-1607472586893-edb57bdc0e39?{_Q}",
+    "Water Tank Cleaning":    f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+    "Bathroom Fitting":       f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+    "Geyser Installation":    f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+    "Kitchen Sink Repair":    f"{_U}/photo-1558618666-fcd25c85f82e?{_Q}",
+    # ── Electrical ──
+    "Wiring Repair":          f"{_U}/photo-1621905251918-48416bd8575a?{_Q}",
+    "Switch Board Repair":    f"{_U}/photo-1513506003901-1e6a229e2d15?{_Q}",
+    "Fan Installation":       f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+    "Light Installation":     f"{_U}/photo-1497366216548-37526070297c?{_Q}",
+    "MCB Tripping Fix":       f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+    "Generator Service":      f"{_U}/photo-1620714223084-8fcacc6dfd8d?{_Q}",
+    "Inverter Installation":  f"{_U}/photo-1504280390367-361c6d9f38f4?{_Q}",
+    # ── AC Repair ──
+    "AC Servicing":           f"{_U}/photo-1621905252507-b35492cc74b4?{_Q}",
+    "AC Installation":        f"{_U}/photo-1585771724684-38269d6639fd?{_Q}",
+    "AC Gas Refill":          f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+    "AC Repair":              f"{_U}/photo-1504215680853-026ed2a45def?{_Q}",
+    "AC Deep Cleaning":       f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
+    # ── Cleaning ──
+    "Deep Home Cleaning":     f"{_U}/photo-1581578731548-c64695cc6952?{_Q}",
+    "Bathroom Cleaning":      f"{_U}/photo-1628177142898-93e36e4e3a50?{_Q}",
+    "Kitchen Cleaning":       f"{_U}/photo-1527515637462-cff94eecc1ac?{_Q}",
+    "Sofa Cleaning":          f"{_U}/photo-1584820927498-cfe5211fd8bf?{_Q}",
+    "Carpet Cleaning":        f"{_U}/photo-1497366811353-6870744d04b2?{_Q}",
+    "Office Cleaning":        f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+    "Window Cleaning":        f"{_U}/photo-1558317374-067fb5f30001?{_Q}",
+    # ── Home Painting ──
+    "Room Painting":          f"{_U}/photo-1589939705384-5185137a7f0f?{_Q}",
+    "Full Home Painting":     f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+    "Exterior Painting":      f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+    "Texture Work":           f"{_U}/photo-1560448204-e02f11c3d0e2?{_Q}",
+    "Waterproof Painting":    f"{_U}/photo-1517816428104-797678c7cf0c?{_Q}",
+    "Wood Polish":            f"{_U}/photo-1416339442236-8ceb164046f8?{_Q}",
+    # ── Carpentry ──
+    "Furniture Repair":       f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+    "Door Installation":      f"{_U}/photo-1504148455328-c376907d081c?{_Q}",
+    "Shelf Installation":     f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+    "Wardrobe Repair":        f"{_U}/photo-1595515106969-1ce29566ff1c?{_Q}",
+    "Window Frame Repair":    f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+    "Custom Woodwork":        f"{_U}/photo-1416339442236-8ceb164046f8?{_Q}",
+    # ── Pest Control ──
+    "General Pest Control":   f"{_U}/photo-1574362848149-11496d93a7c7?{_Q}",
+    "Termite Treatment":      f"{_U}/photo-1615963244664-5b845b2025ee?{_Q}",
+    "Mosquito Fogging":       f"{_U}/photo-1506748686214-e9df14d4d9d0?{_Q}",
+    "Bed Bug Treatment":      f"{_U}/photo-1585320806297-9794b3e4eeae?{_Q}",
+    "Rat Control":            f"{_U}/photo-1574362848149-11496d93a7c7?{_Q}",
+    # ── Appliance Repair ──
+    "Mixer Grinder Repair":   f"{_U}/photo-1556909114-f6e7ad7d3136?{_Q}",
+    "Iron Repair":            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+    "Water Purifier Service": f"{_U}/photo-1584622650111-993a426fbf0a?{_Q}",
+    "Microwave Repair":       f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
+    "Fan Repair":             f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+    "Printer Repair":         f"{_U}/photo-1618221195710-dd6b41faaea6?{_Q}",
+    # ── Refrigerator Repair ──
+    "Fridge Not Cooling":     f"{_U}/photo-1571175443880-49e1d25b2bc5?{_Q}",
+    "Fridge Gas Charging":    f"{_U}/photo-1584568694244-14fbdf83bd30?{_Q}",
+    "Compressor Repair":      f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+    "Fridge Thermostat Fix":  f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+    "Water Dispenser Repair": f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
+    # ── Washing Machine Repair ──
+    "WM Not Draining":        f"{_U}/photo-1626806787461-102c1bfaaea1?{_Q}",
+    "WM Drum Repair":         f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
+    "WM Spin Fix":            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+    "WM Belt Replacement":    f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
+    "WM Full Service":        f"{_U}/photo-1626806787461-102c1bfaaea1?{_Q}",
+    # ── TV Repair ──
+    "LED TV Repair":          f"{_U}/photo-1593784991095-a205069470b6?{_Q}",
+    "Smart TV Software Fix":  f"{_U}/photo-1517816428104-797678c7cf0c?{_Q}",
+    "TV Wall Mounting":       f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+    "Home Theatre Setup":     f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+    "TV Panel Replacement":   f"{_U}/photo-1593784991095-a205069470b6?{_Q}",
+    # ── RO Water Purifier ──
+    "RO Service":             f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+    "RO Filter Change":       f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+    "RO Installation":        f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
+    "RO Leak Repair":         f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+    "UV Bulb Replacement":    f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+    # ── CCTV Installation ──
+    "CCTV Camera Installation": f"{_U}/photo-1557862921-37829c790f19?{_Q}",
+    "CCTV Camera Repair":     f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+    "DVR Setup":              f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+    "Night Vision Camera":    f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+    "CCTV Annual Maintenance": f"{_U}/photo-1557862921-37829c790f19?{_Q}",
+    # ── Interior Design ──
+    "Living Room Design":     f"{_U}/photo-1618221195710-dd6b41faaea6?{_Q}",
+    "Bedroom Design":         f"{_U}/photo-1616486338812-3dadae4b4ace?{_Q}",
+    "Modular Kitchen":        f"{_U}/photo-1616594039964-ae9021a400a0?{_Q}",
+    "Space Planning":         f"{_U}/photo-1524758631624-e2822e304c36?{_Q}",
+    "False Ceiling":          f"{_U}/photo-1618221195710-dd6b41faaea6?{_Q}",
+    # ── Home Shifting ──
+    "Local Shifting":         f"{_U}/photo-1600518464441-9154a4dea21b?{_Q}",
+    "Office Shifting":        f"{_U}/photo-1586528116311-ad8dd3c8310d?{_Q}",
+    "Single Room Shifting":   f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+    "Packing Only":           f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+    "Furniture Moving":       f"{_U}/photo-1504674900247-0877df9cc836?{_Q}",
+    # ── Gardening ──
+    "Garden Maintenance":     f"{_U}/photo-1416879595882-3373a0480b5b?{_Q}",
+    "Lawn Mowing":            f"{_U}/photo-1585320806297-9794b3e4eeae?{_Q}",
+    "Planting Service":       f"{_U}/photo-1466692476868-aef1dfb1e735?{_Q}",
+    "Garden Cleanup":         f"{_U}/photo-1523348837708-15d4a09cfac2?{_Q}",
+    "Irrigation Setup":       f"{_U}/photo-1416879595882-3373a0480b5b?{_Q}",
+    # ── Beauty at Home ──
+    "Full Body Massage":      f"{_U}/photo-1560066984-138dadb4c035?{_Q}",
+    "Facial & Cleanup":       f"{_U}/photo-1570172619644-dfd03ed5d881?{_Q}",
+    "Hair Styling":           f"{_U}/photo-1522337360788-8b13dee7a37e?{_Q}",
+    "Manicure & Pedicure":    f"{_U}/photo-1604654894610-df63bc536371?{_Q}",
+    "Waxing Service":         f"{_U}/photo-1516975080664-ed2fc6a32937?{_Q}",
+    "Bridal Makeup":          f"{_U}/photo-1487412720507-e7ab37603c6f?{_Q}",
+    # ── Spa & Massage ──
+    "Swedish Massage":        f"{_U}/photo-1600334089648-b0d9d3028eb2?{_Q}",
+    "Deep Tissue Massage":    f"{_U}/photo-1519823551278-64ac92734fb1?{_Q}",
+    "Thai Massage":           f"{_U}/photo-1507003211169-0a1dd7228f2d?{_Q}",
+    "Aromatherapy":           f"{_U}/photo-1544161515-4ab6ce6db874?{_Q}",
+    "Head & Shoulder Massage": f"{_U}/photo-1600334089648-b0d9d3028eb2?{_Q}",
+    # ── Cooking / Home Chef ──
+    "Party Catering":         f"{_U}/photo-1556910103-1c02745aae4d?{_Q}",
+    "Daily Tiffin Service":   f"{_U}/photo-1504674900247-0877df9cc836?{_Q}",
+    "Special Diet Meals":     f"{_U}/photo-1512621776951-a57141f2eefd?{_Q}",
+    "Festival Special Cooking": f"{_U}/photo-1555939594-58d7cb561ad1?{_Q}",
+    "BBQ & Grill Service":    f"{_U}/photo-1556910103-1c02745aae4d?{_Q}",
+    # ── Home Tutor ──
+    "Math Tutoring":          f"{_U}/photo-1503676260728-1c00da094a0b?{_Q}",
+    "Science Tutoring":       f"{_U}/photo-1532094349884-543bc11b234d?{_Q}",
+    "English Speaking":       f"{_U}/photo-1456513080510-7bf3a84b82f8?{_Q}",
+    "Board Exam Prep":        f"{_U}/photo-1523580846011-d3a5bc25702b?{_Q}",
+    "Programming Tutor":      f"{_U}/photo-1461749280684-dccba630e2f6?{_Q}",
+    # ── Babysitting ──
+    "Full Day Babysitting":   f"{_U}/photo-1504439468489-c8920d796a29?{_Q}",
+    "Evening Babysitting":    f"{_U}/photo-1515488042361-ee00e0ddd4e4?{_Q}",
+    "Newborn Care":           f"{_U}/photo-1519689680058-324335c77eba?{_Q}",
+    "Toddler Activities":     f"{_U}/photo-1503454537195-1dcabb73ffb9?{_Q}",
+    "Night Babysitting":      f"{_U}/photo-1516627145497-ae6968895b74?{_Q}",
+    # ── Elder Care ──
+    "Senior Companion Care":  f"{_U}/photo-1579154204601-01588f351e67?{_Q}",
+    "Post-Surgery Care":      f"{_U}/photo-1579684385127-1ef15d508118?{_Q}",
+    "Physiotherapy at Home":  f"{_U}/photo-1576091160550-2173dba999ef?{_Q}",
+    "Medication Management":  f"{_U}/photo-1584308666744-24d5c474f2ae?{_Q}",
+    "Daily Routine Assistance": f"{_U}/photo-1579154204601-01588f351e67?{_Q}",
+    # ── Pet Care ──
+    "Dog Grooming":           f"{_U}/photo-1530281700549-e82e7bf110d6?{_Q}",
+    "Pet Walking":            f"{_U}/photo-1543466835-00a7907e9de1?{_Q}",
+    "Pet Bathing":            f"{_U}/photo-1601758228041-f3b2795255f1?{_Q}",
+    "Pet Sitting":            f"{_U}/photo-1628009368231-7bb7cfcb0def?{_Q}",
+    "Vet Visit Escort":       f"{_U}/photo-1587300003388-59208cc962cb?{_Q}",
+    # ── Laundry ──
+    "Wash & Fold":            f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
+    "Dry Cleaning":           f"{_U}/photo-1545173168-9f1947eebb7f?{_Q}",
+    "Ironing Service":        f"{_U}/photo-1527515637462-cff94eecc1ac?{_Q}",
+    "Stain Removal":          f"{_U}/photo-1497366216548-37526070297c?{_Q}",
+    "Curtain Cleaning":       f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
+    # ── Car Wash ──
+    "Exterior Car Wash":      f"{_U}/photo-1507136566006-cfc505b114fc?{_Q}",
+    "Full Car Detailing":     f"{_U}/photo-1542362567-b07e54358753?{_Q}",
+    "Interior Cleaning":      f"{_U}/photo-1489824904134-891ab64532f1?{_Q}",
+    "Car Polishing":          f"{_U}/photo-1503376780353-7e6692767b70?{_Q}",
+    "Engine Bay Cleaning":    f"{_U}/photo-1486262715619-67b85e0b08d3?{_Q}",
+}
 
 
 def _seed_categories_and_services(db) -> tuple[int, int]:
@@ -38,13 +207,10 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
     added_cats = 0
     added_svcs = 0
 
-    _U = "https://images.unsplash.com"
-    _Q = "w=400&h=300&fit=crop&q=80"
-
     CATEGORY_IMAGES = {
         "plumbing": f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
-        "electrical": f"{_U}/photo-1544724107-6d5c4caaff30?{_Q}",
-        "ac-repair": f"{_U}/photo-1631538537798-f090f2d10a6e?{_Q}",
+        "electrical": f"{_U}/photo-1621905251918-48416bd8575a?{_Q}",
+        "ac-repair": f"{_U}/photo-1621905252507-b35492cc74b4?{_Q}",
         "cleaning": f"{_U}/photo-1581578731548-c64695cc6952?{_Q}",
         "home-painting": f"{_U}/photo-1589939705384-5185137a7f0f?{_Q}",
         "carpentry": f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
@@ -53,20 +219,20 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
         "refrigerator-repair": f"{_U}/photo-1571175443880-49e1d25b2bc5?{_Q}",
         "washing-machine-repair": f"{_U}/photo-1626806787461-102c1bfaaea1?{_Q}",
         "tv-repair": f"{_U}/photo-1593784991095-a205069470b6?{_Q}",
-        "ro-water-purifier": f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
+        "ro-water-purifier": f"{_U}/photo-1562281302-809108fd533c?{_Q}",
         "cctv-installation": f"{_U}/photo-1557862921-37829c790f19?{_Q}",
         "interior-design": f"{_U}/photo-1618221195710-dd6b41faaea6?{_Q}",
         "home-shifting": f"{_U}/photo-1600518464441-9154a4dea21b?{_Q}",
         "gardening": f"{_U}/photo-1416879595882-3373a0480b5b?{_Q}",
-        "beauty-at-home": f"{_U}/photo-1544161515-4ab6ce6db874?{_Q}",
-        "spa-massage": f"{_U}/photo-1544161515-4ab6ce6db874?{_Q}",
+        "beauty-at-home": f"{_U}/photo-1560066984-138dadb4c035?{_Q}",
+        "spa-massage": f"{_U}/photo-1600334089648-b0d9d3028eb2?{_Q}",
         "cooking-home-chef": f"{_U}/photo-1556910103-1c02745aae4d?{_Q}",
         "home-tutor": f"{_U}/photo-1503676260728-1c00da094a0b?{_Q}",
         "babysitting": f"{_U}/photo-1504439468489-c8920d796a29?{_Q}",
-        "elder-care": f"{_U}/photo-1576765608846-351a1e832a65?{_Q}",
-        "pet-care": f"{_U}/photo-1587300003388-59208cc962cb?{_Q}",
+        "elder-care": f"{_U}/photo-1579154204601-01588f351e67?{_Q}",
+        "pet-care": f"{_U}/photo-1530281700549-e82e7bf110d6?{_Q}",
         "laundry": f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
-        "car-wash": f"{_U}/photo-1520340356584-f9917d7ed2f5?{_Q}",
+        "car-wash": f"{_U}/photo-1507136566006-cfc505b114fc?{_Q}",
     }
 
     SVC_IMAGES = {
@@ -74,26 +240,177 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
             f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
             f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
             f"{_U}/photo-1584622650111-993a426fbf0a?{_Q}",
+            f"{_U}/photo-1607472586893-edb57bdc0e39?{_Q}",
+            f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+            f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+            f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+            f"{_U}/photo-1558618666-fcd25c85f82e?{_Q}",
         ],
         "electrical": [
-            f"{_U}/photo-1544724107-6d5c4caaff30?{_Q}",
+            f"{_U}/photo-1621905251918-48416bd8575a?{_Q}",
             f"{_U}/photo-1513506003901-1e6a229e2d15?{_Q}",
             f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+            f"{_U}/photo-1497366216548-37526070297c?{_Q}",
+            f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+            f"{_U}/photo-1620714223084-8fcacc6dfd8d?{_Q}",
+            f"{_U}/photo-1504280390367-361c6d9f38f4?{_Q}",
         ],
         "ac-repair": [
-            f"{_U}/photo-1631538537798-f090f2d10a6e?{_Q}",
-            f"{_U}/photo-1585338107529-13af1e580490?{_Q}",
+            f"{_U}/photo-1621905252507-b35492cc74b4?{_Q}",
+            f"{_U}/photo-1585771724684-38269d6639fd?{_Q}",
             f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+            f"{_U}/photo-1504215680853-026ed2a45def?{_Q}",
+            f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
         ],
         "cleaning": [
             f"{_U}/photo-1581578731548-c64695cc6952?{_Q}",
             f"{_U}/photo-1628177142898-93e36e4e3a50?{_Q}",
             f"{_U}/photo-1527515637462-cff94eecc1ac?{_Q}",
+            f"{_U}/photo-1584820927498-cfe5211fd8bf?{_Q}",
+            f"{_U}/photo-1497366811353-6870744d04b2?{_Q}",
+            f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+            f"{_U}/photo-1558317374-067fb5f30001?{_Q}",
+        ],
+        "home-painting": [
+            f"{_U}/photo-1589939705384-5185137a7f0f?{_Q}",
+            f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+            f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+            f"{_U}/photo-1560448204-e02f11c3d0e2?{_Q}",
+            f"{_U}/photo-1517816428104-797678c7cf0c?{_Q}",
+            f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+        ],
+        "carpentry": [
+            f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+            f"{_U}/photo-1504148455328-c376907d081c?{_Q}",
+            f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+            f"{_U}/photo-1595515106969-1ce29566ff1c?{_Q}",
+            f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+        ],
+        "pest-control": [
+            f"{_U}/photo-1574362848149-11496d93a7c7?{_Q}",
+            f"{_U}/photo-1615963244664-5b845b2025ee?{_Q}",
+            f"{_U}/photo-1506748686214-e9df14d4d9d0?{_Q}",
+            f"{_U}/photo-1585320806297-9794b3e4eeae?{_Q}",
+        ],
+        "appliance-repair": [
+            f"{_U}/photo-1556909114-f6e7ad7d3136?{_Q}",
+            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+            f"{_U}/photo-1584622650111-993a426fbf0a?{_Q}",
+            f"{_U}/photo-1501426026826-31c667bdf23d?{_Q}",
+            f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+        ],
+        "refrigerator-repair": [
+            f"{_U}/photo-1571175443880-49e1d25b2bc5?{_Q}",
+            f"{_U}/photo-1584568694244-14fbdf83bd30?{_Q}",
+            f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+            f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+        ],
+        "washing-machine-repair": [
+            f"{_U}/photo-1626806787461-102c1bfaaea1?{_Q}",
+            f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
+            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+            f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
+        ],
+        "tv-repair": [
+            f"{_U}/photo-1593784991095-a205069470b6?{_Q}",
+            f"{_U}/photo-1517816428104-797678c7cf0c?{_Q}",
+            f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+            f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+        ],
+        "ro-water-purifier": [
+            f"{_U}/photo-1562281302-809108fd533c?{_Q}",
+            f"{_U}/photo-1585704032915-c3400ca199e7?{_Q}",
+            f"{_U}/photo-1504328345606-18bbc8c9d7d1?{_Q}",
+            f"{_U}/photo-1513694203232-719a280e022f?{_Q}",
+        ],
+        "cctv-installation": [
+            f"{_U}/photo-1557862921-37829c790f19?{_Q}",
+            f"{_U}/photo-1527515545081-5db817172677?{_Q}",
+            f"{_U}/photo-1588854337236-6889d631faa8?{_Q}",
+            f"{_U}/photo-1558449028-b53a39d100fc?{_Q}",
+        ],
+        "interior-design": [
+            f"{_U}/photo-1618221195710-dd6b41faaea6?{_Q}",
+            f"{_U}/photo-1616486338812-3dadae4b4ace?{_Q}",
+            f"{_U}/photo-1616594039964-ae9021a400a0?{_Q}",
+            f"{_U}/photo-1524758631624-e2822e304c36?{_Q}",
+        ],
+        "home-shifting": [
+            f"{_U}/photo-1600518464441-9154a4dea21b?{_Q}",
+            f"{_U}/photo-1586528116311-ad8dd3c8310d?{_Q}",
+            f"{_U}/photo-1504307651254-35680f356dfd?{_Q}",
+            f"{_U}/photo-1621905251189-08b45d6a269e?{_Q}",
+        ],
+        "gardening": [
+            f"{_U}/photo-1416879595882-3373a0480b5b?{_Q}",
+            f"{_U}/photo-1585320806297-9794b3e4eeae?{_Q}",
+            f"{_U}/photo-1466692476868-aef1dfb1e735?{_Q}",
+            f"{_U}/photo-1523348837708-15d4a09cfac2?{_Q}",
+        ],
+        "beauty-at-home": [
+            f"{_U}/photo-1560066984-138dadb4c035?{_Q}",
+            f"{_U}/photo-1570172619644-dfd03ed5d881?{_Q}",
+            f"{_U}/photo-1522337360788-8b13dee7a37e?{_Q}",
+            f"{_U}/photo-1604654894610-df63bc536371?{_Q}",
+            f"{_U}/photo-1516975080664-ed2fc6a32937?{_Q}",
+            f"{_U}/photo-1487412720507-e7ab37603c6f?{_Q}",
+        ],
+        "spa-massage": [
+            f"{_U}/photo-1600334089648-b0d9d3028eb2?{_Q}",
+            f"{_U}/photo-1519823551278-64ac92734fb1?{_Q}",
+            f"{_U}/photo-1507003211169-0a1dd7228f2d?{_Q}",
+            f"{_U}/photo-1544161515-4ab6ce6db874?{_Q}",
+        ],
+        "cooking-home-chef": [
+            f"{_U}/photo-1556910103-1c02745aae4d?{_Q}",
+            f"{_U}/photo-1504674900247-0877df9cc836?{_Q}",
+            f"{_U}/photo-1512621776951-a57141f2eefd?{_Q}",
+            f"{_U}/photo-1555939594-58d7cb561ad1?{_Q}",
+        ],
+        "home-tutor": [
+            f"{_U}/photo-1503676260728-1c00da094a0b?{_Q}",
+            f"{_U}/photo-1532094349884-543bc11b234d?{_Q}",
+            f"{_U}/photo-1456513080510-7bf3a84b82f8?{_Q}",
+            f"{_U}/photo-1523580846011-d3a5bc25702b?{_Q}",
+            f"{_U}/photo-1461749280684-dccba630e2f6?{_Q}",
+        ],
+        "babysitting": [
+            f"{_U}/photo-1504439468489-c8920d796a29?{_Q}",
+            f"{_U}/photo-1515488042361-ee00e0ddd4e4?{_Q}",
+            f"{_U}/photo-1519689680058-324335c77eba?{_Q}",
+            f"{_U}/photo-1503454537195-1dcabb73ffb9?{_Q}",
+            f"{_U}/photo-1516627145497-ae6968895b74?{_Q}",
+        ],
+        "elder-care": [
+            f"{_U}/photo-1579154204601-01588f351e67?{_Q}",
+            f"{_U}/photo-1579684385127-1ef15d508118?{_Q}",
+            f"{_U}/photo-1576091160550-2173dba999ef?{_Q}",
+            f"{_U}/photo-1584308666744-24d5c474f2ae?{_Q}",
+        ],
+        "pet-care": [
+            f"{_U}/photo-1530281700549-e82e7bf110d6?{_Q}",
+            f"{_U}/photo-1543466835-00a7907e9de1?{_Q}",
+            f"{_U}/photo-1601758228041-f3b2795255f1?{_Q}",
+            f"{_U}/photo-1628009368231-7bb7cfcb0def?{_Q}",
+            f"{_U}/photo-1587300003388-59208cc962cb?{_Q}",
+        ],
+        "laundry": [
+            f"{_U}/photo-1582735689369-4fe89db7114c?{_Q}",
+            f"{_U}/photo-1545173168-9f1947eebb7f?{_Q}",
+            f"{_U}/photo-1527515637462-cff94eecc1ac?{_Q}",
+            f"{_U}/photo-1497366216548-37526070297c?{_Q}",
+        ],
+        "car-wash": [
+            f"{_U}/photo-1507136566006-cfc505b114fc?{_Q}",
+            f"{_U}/photo-1542362567-b07e54358753?{_Q}",
+            f"{_U}/photo-1489824904134-891ab64532f1?{_Q}",
+            f"{_U}/photo-1503376780353-7e6692767b70?{_Q}",
+            f"{_U}/photo-1486262715619-67b85e0b08d3?{_Q}",
         ],
         "default": [
-            f"{_U}/photo-1556909114-f6e7ad7d3136?{_Q}",
+            f"{_U}/photo-1527515545081-5db817172677?{_Q}",
             f"{_U}/photo-1504674900247-0877df9cc836?{_Q}",
-            f"{_U}/photo-1558618666-fcd25c85f82e?{_Q}",
+            f"{_U}/photo-1581578731548-c64695cc6952?{_Q}",
         ],
     }
 
@@ -322,7 +639,7 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
                 slug=svc_slug,
                 description=svc_desc,
                 category_id=cat.id,
-                image=imgs[idx % len(imgs)],
+                image=SERVICE_IMAGE_MAP.get(svc_name, imgs[idx % len(imgs)]),
                 base_price=float(price),
                 duration=dur,
                 rating=round(random.uniform(3.8, 5.0), 1),
@@ -344,7 +661,7 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
         null_svcs = db.query(Service).filter(Service.category_id == cat.id, Service.image.is_(None)).all()
         imgs = SVC_IMAGES.get(slug, SVC_IMAGES["default"])
         for idx, svc in enumerate(null_svcs):
-            svc.image = imgs[idx % len(imgs)]
+            svc.image = SERVICE_IMAGE_MAP.get(svc.name, imgs[idx % len(imgs)])
 
     all_cats = db.query(Category).all()
     for cat in all_cats:
@@ -441,6 +758,9 @@ def _seed_demo_data(db) -> dict:
         counts["workers"] += 1
         counts["users"] += 1
 
+    if counts.get("workers", 0) > 0:
+        _seed_fraud_data(db)
+
     # Admin user
     admin_user = User(
         email="admin@demo.com",
@@ -530,6 +850,65 @@ def _seed_demo_data(db) -> dict:
     return counts
 
 
+def _seed_fraud_data(db):
+    """Seed fraud data for demo workers (trust scores: 98, 90, 78, 38)."""
+    from app.models.worker import Worker
+    from app.models.fraud import WorkerFraudData, FraudReport, SuspiciousActivity
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    configs = [
+        ("Ravi Kumar", 2.0, "low", []),
+        ("Suresh Reddy", 10.0, "low", []),
+        ("Priya Sharma", 22.0, "medium", []),
+        ("Arjun Nair", 62.0, "high", [
+            {"type": "duplicate_phone", "desc": "Phone number matches another worker account", "sev": "medium", "meta": {"detail": "Same +91-98765xxxxx found on 2 accounts"}},
+            {"type": "fake_profile", "desc": "Profile image appears to be AI-generated or stolen", "sev": "high", "meta": {"detail": "Reverse image search returned no results"}},
+            {"type": "suspicious_login", "desc": "Multiple logins from different cities in 1 hour", "sev": "medium", "meta": {"detail": "IP geolocation: Bangalore, Mumbai, Delhi within 60 minutes"}},
+        ]),
+    ]
+    added = 0
+    for wname, score, risk, activities in configs:
+        worker = db.query(Worker).filter(Worker.name == wname).first()
+        if not worker:
+            continue
+        existing_fd = db.query(WorkerFraudData).filter(WorkerFraudData.worker_id == worker.id).first()
+        if existing_fd:
+            existing_fd.fraud_score = score
+            existing_fd.risk_level = risk
+            existing_fd.is_disabled = False
+            existing_fd.last_analysis_at = now_iso
+            db.add(existing_fd)
+        else:
+            db.add(WorkerFraudData(
+                id=str(uuid.uuid4()), worker_id=worker.id,
+                fraud_score=score, is_disabled=False, risk_level=risk, last_analysis_at=now_iso,
+            ))
+        existing_report = db.query(FraudReport).filter(FraudReport.worker_id == worker.id).first()
+        if existing_report:
+            existing_report.fraud_score = score
+            existing_report.risk_level = risk
+            existing_report.analyzed_at = now_iso
+            db.add(existing_report)
+        else:
+            db.add(FraudReport(
+                id=str(uuid.uuid4()), worker_id=worker.id, fraud_score=score, risk_level=risk,
+                reason="Heuristic analysis: high cancellation rate, complaint count, and duplicate phone.",
+                confidence=max(60.0, 100.0 - score),
+                recommendation="no_action" if score < 30 else "warn",
+                triggered_by="seed", analyzed_at=now_iso,
+            ))
+        db.query(SuspiciousActivity).filter(SuspiciousActivity.worker_id == worker.id).delete()
+        for act in activities:
+            db.add(SuspiciousActivity(
+                id=str(uuid.uuid4()), worker_id=worker.id,
+                activity_type=act["type"], description=act["desc"],
+                severity=act["sev"], metadata_json=act["meta"], detected_at=now_iso,
+            ))
+        added += 1
+    if added:
+        logger.info(f"Fraud data seeded for {added} workers")
+
+
 def run_startup_seed():
     """
     Main entry point — called from main.py lifespan.
@@ -569,6 +948,8 @@ def run_startup_seed():
                 logger.info(f"Demo seed: {counts}")
             else:
                 logger.info("Demo data already populated")
+            _seed_fraud_data(db)
+            db.commit()
         else:
             logger.warning("No categories found — skipping demo seed")
     except Exception as e:

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { SlidersHorizontal, Search, Wrench, Sparkles } from 'lucide-react';
+import { ImageRepairCard } from '@/components/ai/ImageRepairCard';
 import { serviceService } from '@/services/service.service';
 import { categoryService } from '@/services/category.service';
 import { searchService } from '@/services/search.service';
@@ -178,6 +179,10 @@ export default function ServicesPage() {
             </>
           )}
         </div>
+      </div>
+
+      <div className="mt-16">
+        <ImageRepairCard />
       </div>
     </div>
   );

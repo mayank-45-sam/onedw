@@ -143,6 +143,14 @@ uploads_dir = ensure_directory(Path(settings.UPLOAD_DIR))
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 
+# Wrap the FastAPI app with the Socket.IO ASGI application so HTTP routes and
+# real-time WebSocket connections (the /socket.io endpoint) share one server.
+from socketio import ASGIApp as SocketIOASGIApp
+from app.core.socketio import sio
+
+app = SocketIOASGIApp(sio, other_asgi_app=app)
+
+
 if __name__ == "__main__":
     import uvicorn
     

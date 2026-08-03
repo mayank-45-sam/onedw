@@ -8,17 +8,18 @@ import { LoadingState } from '@/components/common/States';
 import { ROUTES } from '@/constants/routes';
 
 // Public pages
-const LandingPage       = lazy(() => import('@/pages/public/LandingPage'));
-const AboutPage         = lazy(() => import('@/pages/public/AboutPage'));
-const ServicesPage      = lazy(() => import('@/pages/public/ServicesPage'));
-const CategoriesPage    = lazy(() => import('@/pages/public/CategoriesPage'));
-const CategoryDetailPage = lazy(() => import('@/pages/public/CategoryDetailPage'));
-const WorkersPage       = lazy(() => import('@/pages/public/WorkersPage'));
-const SearchPage        = lazy(() => import('@/pages/public/SearchPage'));
-const WorkerDetailPage  = lazy(() => import('@/pages/public/WorkerDetailPage'));
-const HelpCenterPage    = lazy(() => import('@/pages/public/HelpCenterPage'));
-const FAQPage           = lazy(() => import('@/pages/public/FAQPage'));
-const NotFoundPage      = lazy(() => import('@/pages/public/NotFoundPage'));
+const LandingPage         = lazy(() => import('@/pages/public/LandingPage'));
+const AboutPage           = lazy(() => import('@/pages/public/AboutPage'));
+const ServicesPage        = lazy(() => import('@/pages/public/ServicesPage'));
+const CategoriesPage      = lazy(() => import('@/pages/public/CategoriesPage'));
+const CategoryDetailPage  = lazy(() => import('@/pages/public/CategoryDetailPage'));
+const WorkersPage         = lazy(() => import('@/pages/public/WorkersPage'));
+const SearchPage          = lazy(() => import('@/pages/public/SearchPage'));
+const WorkerDetailPage    = lazy(() => import('@/pages/public/WorkerDetailPage'));
+const HelpCenterPage      = lazy(() => import('@/pages/public/HelpCenterPage'));
+const FAQPage             = lazy(() => import('@/pages/public/FAQPage'));
+const ImageRepairResultPage = lazy(() => import('@/pages/public/ImageRepairResultPage'));
+const NotFoundPage        = lazy(() => import('@/pages/public/NotFoundPage'));
 
 // Auth pages
 const LoginPage         = lazy(() => import('@/pages/auth/LoginPage'));
@@ -27,7 +28,8 @@ const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
 const OtpPage           = lazy(() => import('@/pages/auth/OtpPage'));
 
 // Dashboard pages
-const CustomerDashboardPage = lazy(() => import('@/pages/dashboard/CustomerDashboardPage'));
+const Dashboard            = lazy(() => import('@/pages/Dashboard'));
+const Profile              = lazy(() => import('@/pages/Profile'));
 const WorkerDashboardPage   = lazy(() => import('@/pages/dashboard/WorkerDashboardPage'));
 const AdminDashboardPage    = lazy(() => import('@/pages/dashboard/AdminDashboardPage'));
 const AdminBookingsPage     = lazy(() => import('@/pages/dashboard/AdminBookingsPage'));
@@ -39,6 +41,7 @@ const AdminCouponsPage      = lazy(() => import('@/pages/dashboard/AdminCouponsP
 const AdminReportsPage      = lazy(() => import('@/pages/dashboard/AdminReportsPage'));
 const AdminAnalyticsPage    = lazy(() => import('@/pages/dashboard/AdminAnalyticsPage'));
 const WorkerApprovalQueuePage = lazy(() => import('@/pages/dashboard/WorkerApprovalQueuePage'));
+const AdminVerificationPage   = lazy(() => import('@/pages/dashboard/AdminVerificationPage'));
 const ComplaintManagementPage = lazy(() => import('@/pages/dashboard/ComplaintManagementPage'));
 const RefundRequestsPage    = lazy(() => import('@/pages/dashboard/RefundRequestsPage'));
 const BookingPage        = lazy(() => import('@/pages/booking/BookingPage'));
@@ -47,11 +50,13 @@ const WalletPage         = lazy(() => import('@/pages/dashboard/WalletPage'));
 const NotificationsPage  = lazy(() => import('@/pages/dashboard/NotificationsPage'));
 const ReviewsPage        = lazy(() => import('@/pages/dashboard/ReviewsPage'));
 const FeedbackPage       = lazy(() => import('@/pages/dashboard/FeedbackPage'));
-const ProfilePage        = lazy(() => import('@/pages/dashboard/ProfilePage'));
 const SettingsPage       = lazy(() => import('@/pages/dashboard/SettingsPage'));
+const PrivacySecurityPage = lazy(() => import('@/pages/dashboard/PrivacySecurityPage'));
 const CouponsPage        = lazy(() => import('@/pages/dashboard/CouponsPage'));
 const OffersPage         = lazy(() => import('@/pages/dashboard/OffersPage'));
 const ChatPage           = lazy(() => import('@/pages/dashboard/ChatPage'));
+const WorkerVerificationPage = lazy(() => import('@/pages/auth/WorkerVerificationPage'));
+const FraudDashboardPage = lazy(() => import('@/pages/dashboard/FraudDashboardPage'));
 
 const fallback = <LoadingState className="min-h-[60vh]" />;
 
@@ -70,6 +75,7 @@ export function AppRouter() {
         <Route path={ROUTES.workerDetail}   element={<Suspense fallback={fallback}><WorkerDetailPage /></Suspense>} />
         <Route path={ROUTES.help}           element={<Suspense fallback={fallback}><HelpCenterPage /></Suspense>} />
         <Route path={ROUTES.faq}            element={<Suspense fallback={fallback}><FAQPage /></Suspense>} />
+        <Route path={ROUTES.imageRepairResult} element={<Suspense fallback={fallback}><ImageRepairResultPage /></Suspense>} />
       </Route>
 
       {/* ── Auth ── */}
@@ -82,7 +88,7 @@ export function AppRouter() {
 
       {/* ── Protected dashboard ── */}
       <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-        <Route path={ROUTES.customerDashboard} element={<Suspense fallback={fallback}><CustomerDashboardPage /></Suspense>} />
+        <Route path={ROUTES.customerDashboard} element={<Suspense fallback={fallback}><Dashboard /></Suspense>} />
         <Route path={ROUTES.workerDashboard}   element={<Suspense fallback={fallback}><WorkerDashboardPage /></Suspense>} />
         <Route path={ROUTES.adminDashboard}    element={<Suspense fallback={fallback}><AdminDashboardPage /></Suspense>} />
         <Route path={ROUTES.adminBookings}     element={<Suspense fallback={fallback}><AdminBookingsPage /></Suspense>} />
@@ -94,13 +100,16 @@ export function AppRouter() {
         <Route path={ROUTES.adminReports}      element={<Suspense fallback={fallback}><AdminReportsPage /></Suspense>} />
         <Route path={ROUTES.adminAnalytics}    element={<Suspense fallback={fallback}><AdminAnalyticsPage /></Suspense>} />
         <Route path={ROUTES.workerApprovalQueue} element={<Suspense fallback={fallback}><WorkerApprovalQueuePage /></Suspense>} />
+        <Route path={ROUTES.adminVerification}   element={<Suspense fallback={fallback}><AdminVerificationPage /></Suspense>} />
         <Route path={ROUTES.complaintManagement} element={<Suspense fallback={fallback}><ComplaintManagementPage /></Suspense>} />
         <Route path={ROUTES.refundRequests}    element={<Suspense fallback={fallback}><RefundRequestsPage /></Suspense>} />
+        <Route path={ROUTES.adminFraudDashboard} element={<Suspense fallback={fallback}><FraudDashboardPage /></Suspense>} />
         <Route path={ROUTES.wallet}            element={<Suspense fallback={fallback}><WalletPage /></Suspense>} />
         <Route path={ROUTES.notifications}     element={<Suspense fallback={fallback}><NotificationsPage /></Suspense>} />
         <Route path={ROUTES.reviews}           element={<Suspense fallback={fallback}><ReviewsPage /></Suspense>} />
-        <Route path={ROUTES.profile}           element={<Suspense fallback={fallback}><ProfilePage /></Suspense>} />
+        <Route path={ROUTES.profile}           element={<Suspense fallback={fallback}><Profile /></Suspense>} />
         <Route path={ROUTES.settings}          element={<Suspense fallback={fallback}><SettingsPage /></Suspense>} />
+        <Route path={ROUTES.privacySecurity}   element={<Suspense fallback={fallback}><PrivacySecurityPage /></Suspense>} />
         <Route path={ROUTES.coupons}           element={<Suspense fallback={fallback}><CouponsPage /></Suspense>} />
         <Route path={ROUTES.offers}            element={<Suspense fallback={fallback}><OffersPage /></Suspense>} />
         <Route path={ROUTES.chat}              element={<Suspense fallback={fallback}><ChatPage /></Suspense>} />
@@ -111,8 +120,11 @@ export function AppRouter() {
       <Route path={ROUTES.booking}        element={<ProtectedRoute><Suspense fallback={fallback}><BookingPage /></Suspense></ProtectedRoute>} />
       <Route path={ROUTES.bookingDetails} element={<ProtectedRoute><Suspense fallback={fallback}><BookingDetailsPage /></Suspense></ProtectedRoute>} />
       <Route path={ROUTES.feedback}       element={<ProtectedRoute><Suspense fallback={fallback}><FeedbackPage /></Suspense></ProtectedRoute>} />
+      <Route path={ROUTES.workerVerification} element={<ProtectedRoute><Suspense fallback={fallback}><WorkerVerificationPage /></Suspense></ProtectedRoute>} />
 
-      <Route path={ROUTES.notFound} element={<Suspense fallback={fallback}><NotFoundPage /></Suspense>} />
+      <Route path={ROUTES.adminFraudWorker} element={<ProtectedRoute><Suspense fallback={fallback}><FraudDashboardPage /></Suspense></ProtectedRoute>} />
+
+  <Route path={ROUTES.notFound} element={<Suspense fallback={fallback}><NotFoundPage /></Suspense>} />
     </Routes>
   );
 }

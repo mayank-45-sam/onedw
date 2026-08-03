@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { BadgeCheck, Star, MapPin, Clock, Zap, ArrowRight, Sparkles, TrendingUp, Wallet, Briefcase, Globe } from 'lucide-react';
@@ -6,41 +7,45 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/common/StarRating';
 import { formatCurrency, initials } from '@/utils/format';
+import { RecommendationReason } from '@/components/ai/RecommendationReason';
+import { buildRecommendationReason, workerToSignals } from '@/utils/recommendationReason';
 import type { Worker } from '@/types';
 
-type AIVariant = 'recommended' | 'budget' | 'fastest' | 'highest-rated';
+type AIVariant = 'recommended' | 'nearby' | 'budget' | 'fastest' | 'highest-rated';
 
 const VARIANT_CONFIG: Record<
   AIVariant,
-  { label: string; icon: React.ReactNode; accent: string; ring: string; reason: string }
+  { label: string; icon: React.ReactNode; accent: string; ring: string }
 > = {
   recommended: {
     label: 'AI Pick',
     icon: <Sparkles className="h-3.5 w-3.5" />,
     accent: 'text-primary',
     ring: 'bg-primary/10',
-    reason: 'High rating, fast response, and matches your preferences',
+  },
+  nearby: {
+    label: 'Near You',
+    icon: <MapPin className="h-3.5 w-3.5" />,
+    accent: 'text-accent',
+    ring: 'bg-accent/10',
   },
   budget: {
     label: 'Budget Pick',
     icon: <Wallet className="h-3.5 w-3.5" />,
     accent: 'text-success',
     ring: 'bg-success/10',
-    reason: 'Best value — quality service at the lowest rate',
   },
   fastest: {
     label: 'Fastest',
     icon: <Zap className="h-3.5 w-3.5" />,
     accent: 'text-warning',
     ring: 'bg-warning/10',
-    reason: 'Closest available pro — shortest ETA to your location',
   },
   'highest-rated': {
     label: 'Top Rated',
     icon: <TrendingUp className="h-3.5 w-3.5" />,
     accent: 'text-rose-500',
     ring: 'bg-rose-500/10',
-    reason: 'Highest customer ratings and most positive reviews',
   },
 };
 
@@ -65,6 +70,17 @@ export function AIWorkerCard({
 }: AIWorkerCardProps) {
   const cfg = VARIANT_CONFIG[variant];
   const topSkills = worker.skills?.slice(0, 2) ?? [];
+
+  const reasonLines = useMemo(() => {
+    const options: { distanceKm?: number; etaMinutes?: number; estimatedPrice?: number; savings?: number } = {};
+    const dist = distanceKm ?? worker.distanceKm;
+    const eta = etaMinutes ?? worker.etaMinutes;
+    if (dist != null) options.distanceKm = dist;
+    if (eta != null) options.etaMinutes = eta;
+    if (estimatedPrice != null) options.estimatedPrice = estimatedPrice;
+    if (savings != null) options.savings = savings;
+    return buildRecommendationReason(variant, workerToSignals(worker), options);
+  }, [worker, variant, distanceKm, etaMinutes, estimatedPrice, savings]);
 
   return (
     <motion.div
@@ -105,15 +121,22 @@ export function AIWorkerCard({
           )}
         </div>
 
-        {/* Why this pro? */}
-        <p className="mt-2 text-[11px] text-muted-foreground italic">{cfg.reason}</p>
+        {/* Why this worker? */}
+        <RecommendationReason lines={reasonLines} />
 
         {/* Variant-specific metrics */}
         <div className="mt-3 flex flex-wrap gap-2">
+          {variant === 'nearby' && (
+            <>
+              {(distanceKm ?? worker.distanceKm) != null && <Badge variant="secondary" className="gap-1"><MapPin className="h-3 w-3" /> {(distanceKm ?? worker.distanceKm)!.toFixed(1)} km</Badge>}
+              {(etaMinutes ?? worker.etaMinutes) != null && <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> ETA {(etaMinutes ?? worker.etaMinutes)} min</Badge>}
+              {worker.isOnline && <Badge className="gap-1 bg-success text-white"><span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> Online</Badge>}
+            </>
+          )}
           {variant === 'fastest' && (
             <>
-              <Badge variant="secondary" className="gap-1"><Zap className="h-3 w-3" /> ETA {etaMinutes ?? '—'} min</Badge>
-              {distanceKm != null && <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" /> {distanceKm} km</Badge>}
+              <Badge variant="secondary" className="gap-1"><Zap className="h-3 w-3" /> ETA {etaMinutes ?? worker.etaMinutes ?? '—'} min</Badge>
+              {(distanceKm ?? worker.distanceKm) != null && <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" /> {distanceKm ?? worker.distanceKm} km</Badge>}
               <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {worker.completedJobs} jobs</Badge>
             </>
           )}

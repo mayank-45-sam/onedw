@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -86,6 +86,13 @@ export default function BookingPage() {
   const [couponApplied, setCouponApplied] = useState(false);
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
 
+  const location = useLocation();
+  const bookingState = location.state as {
+    category?: string;
+    service?: string;
+    problem?: string;
+  } | null;
+
   const addressForm = useForm<BookingAddressFormData>({
     resolver: zodResolver(bookingAddressSchema),
   });
@@ -94,6 +101,29 @@ export default function BookingPage() {
     queryKey: queryKeys.services.all({ limit: 20 }),
     queryFn: () => serviceService.list({ limit: 20 }),
   });
+
+  useEffect(() => {
+    if (!bookingState?.category) return;
+    const categorySlugMap: Record<string, string> = {
+      plumbing: 'plumbing',
+      cleaning: 'cleaning',
+      ac_repair: 'ac-repair',
+      electrician: 'electrical',
+      electrical: 'electrical',
+    };
+    const targetSlug = categorySlugMap[bookingState.category];
+    if (!targetSlug || !servicesQuery.data?.data) return;
+
+    const match = servicesQuery.data.data.find(
+      (s) => s.category?.slug === targetSlug
+    );
+    if (match) {
+      setSelectedService(match);
+    }
+    if (bookingState.problem) {
+      setProblem(bookingState.problem);
+    }
+  }, [bookingState?.category, bookingState?.problem, servicesQuery.data?.data]);
 
   const workersQuery = useQuery({
     queryKey: queryKeys.workers.all({ service: selectedService?._id }),
@@ -117,7 +147,7 @@ export default function BookingPage() {
     enabled: step === 7,
   });
   const nearbyMapWorkers: NearbyWorker[] = (nearbyMapQuery.data ?? []).map((w) => ({
-    id: w.id,
+    id: w._id,
     name: w.name,
     profession: w.profession,
     avatar: w.avatar,

@@ -46,7 +46,43 @@ def _serialize_worker(w: Worker) -> dict:
     }
 
 
+def _serialize_pick(db: Session, w: Worker, lat=None, lng=None) -> dict:
+    """Full worker payload (trust, badge, response time, ETA, distance)."""
+    from app.services.recommendation_service import serialize_worker, _distance_to
+
+    dist = _distance_to(db, w, lat, lng) if lat is not None and lng is not None else None
+    return serialize_worker(db, w, lat, lng, distance_km=dist)
+
+
+def _compute_picks(db: Session, workers, lat=None, lng=None):
+    """Return (budget, fastest, highest_rated) worker picks from a pool."""
+    from app.services.recommendation_service import _response_time_minutes
+
+    if not workers:
+        return None, None, None
+    budget = min(workers, key=lambda w: (w.hourly_rate or 0, -(w.rating or 0)))
+    fastest = min(workers, key=lambda w: _response_time_minutes(db, w))
+    highest = max(workers, key=lambda w: (w.rating or 0, w.review_count or 0))
+    return (
+        _serialize_pick(db, budget, lat, lng),
+        _serialize_pick(db, fastest, lat, lng),
+        _serialize_pick(db, highest, lat, lng),
+    )
+
+
 def _serialize_service(s: Service) -> dict:
+    cat_data = None
+    if s.category:
+        cat_data = {
+            "id": s.category.id,
+            "name": s.category.name,
+            "slug": s.category.slug,
+            "description": s.category.description,
+            "icon": s.category.icon,
+            "image": s.category.image,
+            "color": s.category.color,
+            "service_count": s.category.service_count,
+        }
     return {
         "id": s.id,
         "name": s.name,
@@ -61,6 +97,7 @@ def _serialize_service(s: Service) -> dict:
         "popular": s.popular,
         "trending": s.trending,
         "tags": s.tags or [],
+        "category": cat_data,
         "created_at": s.created_at.isoformat() if s.created_at else None,
     }
 
@@ -112,6 +149,8 @@ def search(
         {"label": "Budget Friendly", "value": "budget"},
     ]
 
+    budget_worker, fastest_worker, highest_rated_worker = _compute_picks(db, wrk_results, lat, lng)
+
     return {
         "success": True,
         "message": "Search completed",
@@ -120,6 +159,9 @@ def search(
             "workers": {"data": workers, "total": len(workers), "page": 1, "limit": limit, "pages": 1},
             "suggestions": suggestions,
             "recommended_filters": recommended_filters,
+            "budgetWorker": budget_worker,
+            "fastestWorker": fastest_worker,
+            "highestRatedWorker": highest_rated_worker,
         },
     }
 
@@ -183,17 +225,64 @@ def similar_workers(
     worker_id: str,
     limit: int = Query(5, ge=1, le=20),
     kind: str = Query("similar"),
+    lat: Optional[float] = Query(None, ge=-90, le=90),
+    lng: Optional[float] = Query(None, ge=-180, le=180),
     db: Session = Depends(get_db),
 ):
+    """Find workers similar to the given worker.
+
+    `kind` selects the ranking strategy:
+    - similar  -> same skills, best rated
+    - budget   -> same skills, cheapest first
+    - premium  -> same skills, most expensive + best rated first
+    - nearby   -> same skills, online/available first, closest first
+    """
+    from app.services.recommendation_service import serialize_worker, _distance_to
+
     worker = db.query(Worker).filter(Worker.id == worker_id).first()
     if worker is None:
-        results = db.query(Worker).limit(limit).all()
+        candidates = list(db.query(Worker).all())
+        target = set()
     else:
-        results = db.query(Worker).filter(
-            Worker.id != worker_id,
-            Worker.category_ids.overlap(worker.category_ids) if worker.category_ids else True,
-        ).limit(limit).all()
-    return {"success": True, "message": "OK", "data": {"items": [_serialize_worker(w) for w in results]}}
+        target = set(worker.category_ids or [])
+        candidates = list(db.query(Worker).filter(Worker.id != worker_id).all())
+
+    if target:
+        matched = [w for w in candidates if target & set(w.category_ids or [])]
+        pool = matched if matched else candidates
+    else:
+        pool = candidates
+
+    def distance_of(w):
+        if lat is not None and lng is not None:
+            d = _distance_to(db, w, lat, lng)
+            return d if d is not None else float("inf")
+        return None
+
+    ranked = []
+    for w in pool:
+        ranked.append((w, distance_of(w)))
+
+    if kind == "budget":
+        ranked.sort(key=lambda t: (t[0].hourly_rate or 0, -(t[0].rating or 0)))
+    elif kind == "premium":
+        ranked.sort(key=lambda t: (-(t[0].hourly_rate or 0), -(t[0].rating or 0)))
+    elif kind == "nearby":
+        ranked.sort(
+            key=lambda t: (
+                0 if t[0].is_online else 1,
+                t[1] if t[1] is not None else float("inf"),
+                -(t[0].rating or 0),
+            )
+        )
+    else:
+        ranked.sort(key=lambda t: (-(t[0].rating or 0), -(t[0].completed_jobs or 0)))
+
+    items = [
+        serialize_worker(db, w, lat, lng, distance_km=d if d != float("inf") else None)
+        for w, d in ranked[:limit]
+    ]
+    return {"success": True, "message": "OK", "data": {"items": items}}
 
 
 @router.get("/services/{service_id}/similar", summary="Find similar services")

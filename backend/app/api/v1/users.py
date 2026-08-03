@@ -1,10 +1,13 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
+from app.models.worker import Worker
+from app.models.customer import Customer
 from app.schemas.auth import (
     ProfileUpdateRequest,
     PasswordChangeRequest,
@@ -15,6 +18,84 @@ from app.core.config import settings
 from app.core.exceptions import BadRequestException
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get(
+    "/search",
+    summary="Search users to start a conversation",
+)
+def search_users(
+    q: str = Query("", max_length=100),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Search active users by name or profession. Returns user ids so the
+    result can be used directly to start a chat conversation."""
+    query_text = q.strip().lower()
+    results = []
+
+    if query_text:
+        workers = (
+            db.query(Worker)
+            .filter(
+                Worker.user_id != current_user.id,
+                or_(
+                    Worker.name.ilike(f"%{query_text}%"),
+                    Worker.profession.ilike(f"%{query_text}%"),
+                ),
+            )
+            .limit(limit)
+            .all()
+        )
+        customers = (
+            db.query(Customer)
+            .filter(
+                Customer.user_id != current_user.id,
+                Customer.name.ilike(f"%{query_text}%"),
+            )
+            .limit(limit)
+            .all()
+        )
+    else:
+        workers = (
+            db.query(Worker)
+            .filter(Worker.user_id != current_user.id)
+            .order_by(Worker.is_online.desc(), Worker.rating.desc())
+            .limit(limit)
+            .all()
+        )
+        customers = []
+
+    for w in workers:
+        results.append(
+            {
+                "id": w.user_id,
+                "name": w.name,
+                "avatar": w.avatar,
+                "role": "worker",
+                "profession": w.profession,
+            }
+        )
+    for c in customers:
+        results.append(
+            {
+                "id": c.user_id,
+                "name": c.name,
+                "avatar": c.avatar,
+                "role": "customer",
+                "profession": None,
+            }
+        )
+
+    seen = set()
+    deduped = []
+    for item in results:
+        if item["id"] not in seen:
+            seen.add(item["id"])
+            deduped.append(item)
+
+    return {"success": True, "message": "Users retrieved", "data": deduped}
 
 
 @router.get(
