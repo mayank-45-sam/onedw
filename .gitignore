@@ -1,74 +1,77 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Dependencies
+/frontend/node_modules/
+/frontend/.pnp
+/frontend/.pnp.js
 
-# testing
-/coverage
+# Testing
+/frontend/coverage/
 
-# next.js
-/.next/
-/out/
+# Next.js (if present in future)
+/frontend/.next/
+/frontend/out/
 
-# production
-/build
-/dist
+# Production builds
+/frontend/build/
+/frontend/dist/
 
-# misc
-.DS_Store
+# Misc
+*.DS_Store
 *.pem
 
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env
-.env*.local
+# Local env files — do NOT commit (contains secrets)
+/frontend/.env
+/frontend/.env*.local
+/backend/.env
+/backend/.env*.local
 
-# vercel
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
-next-env.d.ts
+/frontend/next-env.d.ts
 
 # Python / Backend
 __pycache__/
 *.pyc
 *.pyo
 .venv/
-backend/.venv/
-backend/__pycache__/
-backend/**/__pycache__/
-backend/*.db
-backend/logs/
-backend/.pytest_cache/
-backend/uploads/
+/backend/.venv/
+/backend/__pycache__/
+/backend/**/__pycache__/
 
 # Database
 *.db
 
 # Test artifacts
-test_*.json
-test_*.py
+/test_*.json
+/test_*.py
+/scripts/test_*.py
 
-# Logs
+# Backend logs
+/backend/logs/
+/backend/.pytest_cache/
+
+# Backend uploads
+/backend/uploads/
+
+# General logs
 *.log
 /logs/
-backend/tests/run
 
 # Uploads
 /uploads/
 
-# Misc
-1000091230.jpg
+# Backend tests run scripts
+/backend/tests/run
 
 # IDE
 .vscode/settings.json
 .idea/
-.env
-.env.*s

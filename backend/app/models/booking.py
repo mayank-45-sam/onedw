@@ -1,6 +1,6 @@
 import uuid
 import enum
-from sqlalchemy import Column, String, Float, Integer, ForeignKey, JSON, Enum as SAEnum
+from sqlalchemy import Column, String, Float, Integer, Boolean, ForeignKey, JSON, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 
@@ -31,6 +31,12 @@ class PaymentMethod(str, enum.Enum):
     UPI = "upi"
 
 
+class BookingType(str, enum.Enum):
+    SCHEDULED = "scheduled"
+    INSTANT = "instant"
+    EMERGENCY = "emergency"
+
+
 class Booking(BaseModel):
     __tablename__ = "bookings"
 
@@ -57,6 +63,8 @@ class Booking(BaseModel):
     refund_reason = Column(String(500), nullable=True)
     eta_minutes = Column(Integer, nullable=True)
     distance_km = Column(Float, nullable=True)
+    booking_type = Column(SAEnum(BookingType, name="booking_type", create_constraint=True), nullable=False, default=BookingType.SCHEDULED)
+    is_emergency = Column(Boolean, default=False, nullable=False)
 
     customer = relationship("Customer", back_populates="bookings")
     worker = relationship("Worker", back_populates="bookings")

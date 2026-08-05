@@ -20,6 +20,8 @@ from app.api.v1.image_analysis import router as image_analysis_router
 from app.api.v1.fraud import router as fraud_router
 from app.api.v1.verification import router as verification_router
 from app.api.v1.support import router as support_router
+from app.api.v1.bidding import router as bidding_router
+from app.api.v1.broadcasts import router as broadcasts_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -43,3 +45,5 @@ api_router.include_router(image_analysis_router)
 api_router.include_router(fraud_router)
 api_router.include_router(verification_router)
 api_router.include_router(support_router)
+api_router.include_router(bidding_router)
+api_router.include_router(broadcasts_router)

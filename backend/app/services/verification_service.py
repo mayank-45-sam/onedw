@@ -51,6 +51,22 @@ QUESTION_TIME_LIMITS = {
     "short_answer": 60,
 }
 
+# Languages the worker can take the skill test in. The value is the language's
+# English name used in the LLM prompt.
+SUPPORTED_TEST_LANGUAGES = {
+    "en": "English",
+    "tamil": "Tamil",
+    "hindi": "Hindi",
+}
+
+_LANGUAGE_RULES = {
+    "en": "English.",
+    "tamil": "Tamil (தமிழ்). Write every question, every answer option and every "
+        "worker-facing label in Tamil. Keep technical terms professional and commonly understood.",
+    "hindi": "Hindi (हिन्दी). Write every question, every answer option and every "
+        "worker-facing label in Hindi. Keep technical terms professional and commonly understood.",
+}
+
 PASS_SCORE = 60.0
 REJECTED_RETRY_DAYS = 7
 
@@ -78,14 +94,21 @@ def gemini_available() -> bool:
     return bool(settings.GEMINI_API_KEY)
 
 
-def _parse_ai_json(text: str) -> dict:
-    """Extract a JSON object from a Gemini response, tolerating fences/truncation."""
+def _parse_ai_json(text: str):
+    """Extract JSON from a Gemini response, tolerating fences/truncation.
+
+    Returns whatever top-level JSON shape was produced (object or array).
+    """
     cleaned = (text or "").strip()
     for prefix in ("```json", "```"):
         if cleaned.startswith(prefix):
             cleaned = cleaned[len(prefix):].strip()
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3].rstrip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
     start = cleaned.find("{")
     if start == -1:
         raise ValueError("No JSON object found in AI response")
@@ -103,8 +126,8 @@ def _parse_ai_json(text: str) -> dict:
     raise ValueError("Could not parse AI response as JSON")
 
 
-def _generate_json(prompt: str, temperature: float = 0.7) -> dict:
-    """Run a Gemini call that must return a JSON object."""
+def _generate_json(prompt: str, temperature: float = 0.7):
+    """Run a Gemini call that must return JSON (object or array)."""
     client = _get_gemini_client()
     if not client:
         raise ValueError("Gemini API not configured")
@@ -660,6 +683,7 @@ You are a senior trade examiner for the OneDW worker platform. Create a technica
 Relevant topics for {profession}: {topics}
 
 STRICT RULES:
+- Write the entire assessment in: {language_rule}
 - EVERY question must be a hands-on technical question about {profession} work: a specific tool, material, component, fault, repair step, measurement or safety practice used in {profession} work.
 - Each question MUST clearly reference something from the relevant topics above (e.g. for a Plumber: leaking pipes/taps, PVC/PPR pipes, valves, water pressure, drains, geysers, washer vs cartridge repair).
 - NEVER generate generic customer-service, behavioural, sales or soft-skill questions (for example "how do you manage a customer asking for a discount", "how would you greet a customer", "time management") unless the question is directly about a {profession} technical task.
@@ -774,13 +798,25 @@ def _on_topic(text: str, profession: str) -> bool:
     return any(kw in lowered for kw in keywords)
 
 
-def _ensure_profession_questions(profession: str, questions: list) -> list:
+def _ensure_profession_questions(profession: str, questions: list, language: str = "en") -> list:
     """Validate every question against the selected profession and replace any
     off-topic one with an on-topic question from the deterministic local bank,
     preserving the original slot and difficulty. Guarantees the worker never sees
     a question from another trade or a generic soft-skill question.
+
+    Non-English tests skip the keyword replacement: the keyword dictionary is
+    English-only, and the local bank only contains English questions, so we trust
+    the LLM's profession-specific output and only keep the structure stable.
     """
     profession = profession or "general technician"
+    if language != "en":
+        fixed = []
+        for i, q in enumerate(questions):
+            q = dict(q)
+            q["id"] = f"q_{i + 1}"
+            q["language"] = language
+            fixed.append(q)
+        return fixed
     pool = _local_question_pool(profession)
     random.shuffle(pool)
     replacements = iter(pool)
@@ -788,6 +824,7 @@ def _ensure_profession_questions(profession: str, questions: list) -> list:
     for i, q in enumerate(questions):
         q = dict(q)
         q["id"] = f"q_{i + 1}"
+        q["language"] = language
         if _on_topic(q.get("question", ""), profession):
             fixed.append(q)
             continue
@@ -801,6 +838,7 @@ def _ensure_profession_questions(profession: str, questions: list) -> list:
             fallback = dict(next(replacements, _short(f"Describe the safe way to complete a {profession} job you do every day.", "hard")))
         fallback["id"] = f"q_{i + 1}"
         fallback["difficulty"] = q.get("difficulty") or "medium"
+        fallback["language"] = language
         fixed.append(fallback)
     return fixed
 
@@ -811,8 +849,8 @@ _QUESTION_CACHE_TTL = timedelta(hours=6)
 _QUESTION_CACHE: dict = {}
 
 
-def _cached_questions(profession: str) -> Optional[list]:
-    entry = _QUESTION_CACHE.get(_profession_key(profession or "general"))
+def _cached_questions(profession: str, language: str = "en") -> Optional[list]:
+    entry = _QUESTION_CACHE.get((_profession_key(profession or "general"), language))
     if not entry:
         return None
     generated_at, questions = entry
@@ -821,26 +859,29 @@ def _cached_questions(profession: str) -> Optional[list]:
     return copy.deepcopy(questions)
 
 
-def _cache_questions(profession: str, questions: list) -> None:
-    _QUESTION_CACHE[_profession_key(profession or "general")] = (
+def _cache_questions(profession: str, language: str, questions: list) -> None:
+    _QUESTION_CACHE[(_profession_key(profession or "general"), language)] = (
         datetime.now(timezone.utc),
         copy.deepcopy(questions),
     )
 
 
-def generate_skill_test_questions(profession: str) -> list:
+def generate_skill_test_questions(profession: str, language: str = "en") -> list:
     """Generate a fresh question set. Uses Gemini; falls back to the local bank.
 
     The returned list is always validated to be on-topic for the profession and
-    ordered easy -> medium -> hard (1-3 easy, 4-7 medium, 8-10 hard).
+    ordered easy -> medium -> hard (1-3 easy, 4-7 medium, 8-10 hard). When a
+    non-English language is requested and Gemini is available, every question and
+    option is written in that language.
 
-    Generated sets are cached per profession so repeat attempts (e.g. after a
+    Generated sets are cached per profession + language so repeat attempts (e.g. after a
     client-side timeout or on retry) return instantly instead of hitting the
     AI/rate-limited pipeline again.
     """
-    cached = _cached_questions(profession)
+    language = language if language in SUPPORTED_TEST_LANGUAGES else "en"
+    cached = _cached_questions(profession, language)
     if cached is not None:
-        logger.info(f"Using cached skill-test question set for '{profession}'")
+        logger.info(f"Using cached skill-test question set for '{profession}' ({language})")
         return cached
 
     questions = None
@@ -849,6 +890,7 @@ def generate_skill_test_questions(profession: str) -> list:
             prompt = SKILL_TEST_PROMPT.format(
                 profession=profession or "general technician",
                 topics=_profession_guide(profession or "general technician"),
+                language_rule=_LANGUAGE_RULES.get(language, _LANGUAGE_RULES["en"]),
             )
             result = _generate_json(prompt, temperature=1.0)
             questions = result if isinstance(result, list) else result.get("questions", [])
@@ -873,6 +915,7 @@ def generate_skill_test_questions(profession: str) -> list:
                         "difficulty": str(q.get("difficulty") or "medium"),
                         "time_limit": int(q.get("time_limit") or QUESTION_TIME_LIMITS[qtype]),
                         "image_url": image_url if qtype == "image" else None,
+                        "language": language,
                     })
                 if len(normalized) >= 8:
                     questions = normalized
@@ -883,10 +926,12 @@ def generate_skill_test_questions(profession: str) -> list:
             questions = None
     if questions is None:
         questions = _sample_local_questions(profession)
-    questions = _ensure_profession_questions(profession or "general technician", questions)
+        for q in questions:
+            q["language"] = "en"
+    questions = _ensure_profession_questions(profession or "general technician", questions, language)
     questions = _reorder_progressive(questions)
     _attach_question_images(questions, profession or "general technician")
-    _cache_questions(profession, questions)
+    _cache_questions(profession, language, questions)
     return questions
 
 
@@ -989,6 +1034,22 @@ _VISION_THROTTLED_UNTIL: Optional[datetime] = None
 _VISION_THROTTLE_SECONDS = 300
 
 
+def _set_vision_throttled() -> None:
+    """Record that the vision/relevance API is rate-limiting us for a while."""
+    global _VISION_THROTTLED_UNTIL
+    _VISION_THROTTLED_UNTIL = datetime.now(timezone.utc) + timedelta(seconds=_VISION_THROTTLE_SECONDS)
+
+
+def _vision_is_throttled() -> bool:
+    global _VISION_THROTTLED_UNTIL
+    if _VISION_THROTTLED_UNTIL is None:
+        return False
+    if datetime.now(timezone.utc) > _VISION_THROTTLED_UNTIL:
+        _VISION_THROTTLED_UNTIL = None
+        return False
+    return True
+
+
 def _generate_question_image(question: dict, profession: str) -> Optional[str]:
     """Generate an image for the finalized question and store it locally. Returns a /uploads URL or None."""
     if not _image_gen_available():
@@ -1038,6 +1099,8 @@ def _validate_image_relevance(image_ref: str, question: dict, profession: str) -
     ACCEPTED so the flow never blocks — the curated pool is on-topic by
     construction and generated images are on-topic by prompt.
     """
+    if _vision_is_throttled():
+        return True
     client = _get_gemini_client()
     if not client:
         return True

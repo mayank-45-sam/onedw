@@ -2,6 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
+from app.models.category import Category
 from app.models.service import Service
 from app.repositories.base import BaseRepository
 
@@ -35,10 +36,12 @@ class ServiceRepository(BaseRepository[Service]):
             query = query.filter(Service.rating >= min_rating)
         if search_query:
             pattern = f"%{search_query}%"
-            query = query.filter(
+            query = query.outerjoin(Category, Service.category_id == Category.id).filter(
                 or_(
                     Service.name.ilike(pattern),
                     Service.description.ilike(pattern),
+                    Category.name.ilike(pattern),
+                    Category.slug.ilike(pattern),
                 )
             )
 

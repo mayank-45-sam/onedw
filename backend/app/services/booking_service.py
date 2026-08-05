@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from app.models.booking import Booking, BookingStatus
+from app.models.booking import Booking, BookingStatus, BookingType
 from app.models.customer import Customer
 from app.repositories.booking_repository import BookingRepository
 from app.repositories.worker_repository import WorkerRepository
@@ -50,6 +50,9 @@ class BookingService:
         worker_id: Optional[str] = None,
         coupon_code: Optional[str] = None,
         problem_images: Optional[list] = None,
+        booking_type: Optional[str] = "scheduled",
+        is_emergency: bool = False,
+        eta_minutes: Optional[int] = None,
     ) -> dict:
         service = self.service_repo.get(service_id)
         if service is None:
@@ -89,6 +92,9 @@ class BookingService:
             coupon_code=coupon_code_used,
             discount=discount,
             final_price=final_price,
+            eta_minutes=eta_minutes,
+            booking_type=BookingType(booking_type) if booking_type else BookingType.SCHEDULED,
+            is_emergency=is_emergency,
         )
         self.db.add(booking)
         self.db.flush()
@@ -283,6 +289,8 @@ class BookingService:
             "paid_at": b.paid_at,
             "eta_minutes": b.eta_minutes,
             "distance_km": b.distance_km,
+            "booking_type": b.booking_type.value if hasattr(b.booking_type, "value") else b.booking_type,
+            "is_emergency": b.is_emergency,
         }
 
     def _serialize_booking_detail(self, b) -> dict:

@@ -709,24 +709,154 @@ def _seed_demo_data(db) -> dict:
         db.add(Wallet(user_id=u.id))
         counts["users"] += 1
 
-    # Workers
+    # Workers — ~4 demo workers per category so every category search returns pros
     worker_data = [
+        # plumbing
         ("Ravi Kumar", "Plumber", "plumbing", 4.8, 7, 35.0, (12.9716, 77.5946)),
+        ("Amit Sharma", "Plumber", "plumbing", 4.2, 6, 28.0, (12.9680, 77.5880)),
+        ("Vinod Raj", "Plumber", "plumbing", 3.9, 3, 22.0, (12.9740, 77.6010)),
+        ("Prakash Nair", "Plumber", "plumbing", 4.7, 12, 55.0, (12.9810, 77.5960)),
+        # electrical
         ("Suresh Reddy", "Electrician", "electrical", 4.6, 5, 30.0, (12.9750, 77.5980)),
+        ("Manoj Kumar", "Electrician", "electrical", 4.4, 8, 40.0, (12.9690, 77.5900)),
+        ("Rakesh Yadav", "Electrician", "electrical", 4.0, 4, 24.0, (12.9780, 77.5930)),
+        ("Sunil Rao", "Electrician", "electrical", 4.8, 10, 50.0, (12.9860, 77.5990)),
+        # cleaning
         ("Priya Sharma", "Cleaner", "cleaning", 4.9, 4, 25.0, (12.9800, 77.5850)),
+        ("Lakshmi Devi", "Cleaner", "cleaning", 4.5, 6, 20.0, (12.9720, 77.5910)),
+        ("Rekha Kumari", "Cleaner", "cleaning", 4.2, 2, 18.0, (12.9760, 77.5950)),
+        ("Kavitha Rao", "Cleaner", "cleaning", 4.7, 5, 28.0, (12.9830, 77.5890)),
+        # ac-repair
         ("Arjun Nair", "AC Tech", "ac-repair", 4.3, 3, 40.0, (12.9850, 77.5900)),
+        ("Rajesh Menon", "AC Technician", "ac-repair", 4.6, 7, 50.0, (12.9730, 77.5940)),
+        ("Kiran Kumar", "AC Technician", "ac-repair", 4.0, 5, 35.0, (12.9790, 77.6000)),
+        ("Deepak Jain", "AC Technician", "ac-repair", 4.8, 9, 60.0, (12.9840, 77.5860)),
+        # home-painting
+        ("Manoj Yadav", "Painter", "home-painting", 4.5, 8, 28.0, (12.9700, 77.5920)),
+        ("Suresh Kumar", "Painter", "home-painting", 4.2, 5, 22.0, (12.9770, 77.5970)),
+        ("Ramesh Patel", "Painter", "home-painting", 4.6, 10, 32.0, (12.9820, 77.5870)),
+        ("Vijay Chauhan", "Painter", "home-painting", 4.0, 3, 20.0, (12.9740, 77.6030)),
+        # carpentry
+        ("Vikram Singh", "Carpenter", "carpentry", 4.7, 6, 32.0, (12.9720, 77.5890)),
+        ("Ganesh Iyer", "Carpenter", "carpentry", 4.4, 8, 28.0, (12.9790, 77.5930)),
+        ("Santosh Kumar", "Carpenter", "carpentry", 4.1, 4, 24.0, (12.9750, 77.6020)),
+        ("Ravi Shetty", "Carpenter", "carpentry", 4.8, 12, 45.0, (12.9840, 77.5910)),
+        # pest-control
+        ("Deepak Verma", "Pest Control Technician", "pest-control", 4.6, 5, 45.0, (12.9730, 77.5950)),
+        ("Rahul Singh", "Pest Control Technician", "pest-control", 4.3, 4, 38.0, (12.9780, 77.5900)),
+        ("Ashok Kumar", "Pest Control Technician", "pest-control", 4.5, 7, 48.0, (12.9810, 77.5980)),
+        ("Nitin Gupta", "Pest Control Technician", "pest-control", 4.0, 3, 35.0, (12.9680, 77.6010)),
+        # appliance-repair
+        ("Anil Kumar", "Appliance Repair Technician", "appliance-repair", 4.4, 6, 38.0, (12.9740, 77.5920)),
+        ("Suresh Menon", "Appliance Repair Technician", "appliance-repair", 4.6, 8, 42.0, (12.9800, 77.5960)),
+        ("Praveen Kumar", "Appliance Repair Technician", "appliance-repair", 4.1, 4, 32.0, (12.9760, 77.5870)),
+        ("Dinesh Rao", "Appliance Repair Technician", "appliance-repair", 4.7, 10, 48.0, (12.9830, 77.6000)),
+        # refrigerator-repair
+        ("Rohit Sharma", "Fridge Repair Technician", "refrigerator-repair", 4.5, 5, 36.0, (12.9710, 77.5900)),
+        ("Mahesh Kumar", "Fridge Repair Technician", "refrigerator-repair", 4.2, 4, 30.0, (12.9770, 77.5960)),
+        ("Surendra Yadav", "Fridge Repair Technician", "refrigerator-repair", 4.6, 7, 40.0, (12.9820, 77.5880)),
+        ("Akash Verma", "Fridge Repair Technician", "refrigerator-repair", 4.0, 3, 28.0, (12.9750, 77.6020)),
+        # washing-machine-repair
+        ("Karan Mehta", "Washing Machine Technician", "washing-machine-repair", 4.6, 4, 34.0, (12.9720, 77.5940)),
+        ("Naveen Kumar", "Washing Machine Technician", "washing-machine-repair", 4.3, 5, 30.0, (12.9790, 77.5990)),
+        ("Sandeep Rao", "Washing Machine Technician", "washing-machine-repair", 4.5, 6, 36.0, (12.9740, 77.5870)),
+        ("Rohan Gupta", "Washing Machine Technician", "washing-machine-repair", 4.0, 3, 26.0, (12.9810, 77.6010)),
+        # tv-repair
+        ("Sanjay Mishra", "TV Repair Technician", "tv-repair", 4.4, 6, 30.0, (12.9700, 77.5930)),
+        ("Pankaj Kumar", "TV Repair Technician", "tv-repair", 4.6, 8, 34.0, (12.9780, 77.5900)),
+        ("Tarun Rao", "TV Repair Technician", "tv-repair", 4.1, 4, 26.0, (12.9760, 77.6020)),
+        ("Varun Sharma", "TV Repair Technician", "tv-repair", 4.7, 9, 40.0, (12.9830, 77.5960)),
+        # ro-water-purifier
+        ("Hari Prasad", "RO Technician", "ro-water-purifier", 4.5, 5, 32.0, (12.9730, 77.5910)),
+        ("Sridhar Kumar", "RO Technician", "ro-water-purifier", 4.3, 6, 30.0, (12.9790, 77.5970)),
+        ("Raju Naik", "RO Technician", "ro-water-purifier", 4.6, 7, 36.0, (12.9750, 77.5880)),
+        ("Mohan Rao", "RO Technician", "ro-water-purifier", 4.0, 3, 26.0, (12.9810, 77.6010)),
+        # cctv-installation
+        ("Suresh Kamath", "CCTV Technician", "cctv-installation", 4.6, 6, 42.0, (12.9710, 77.5950)),
+        ("Nikhil Kumar", "CCTV Technician", "cctv-installation", 4.3, 4, 36.0, (12.9770, 77.5900)),
+        ("Arvind Rao", "CCTV Technician", "cctv-installation", 4.5, 8, 45.0, (12.9830, 77.5980)),
+        ("Karthik Menon", "CCTV Technician", "cctv-installation", 4.1, 3, 32.0, (12.9690, 77.6020)),
+        # interior-design
+        ("Meera Krishnan", "Interior Designer", "interior-design", 4.8, 8, 80.0, (12.9820, 77.5930)),
+        ("Divya Menon", "Interior Designer", "interior-design", 4.6, 6, 65.0, (12.9740, 77.5890)),
+        ("Anjali Iyer", "Interior Designer", "interior-design", 4.4, 5, 55.0, (12.9780, 77.5970)),
+        ("Priyanka Rao", "Interior Designer", "interior-design", 4.7, 7, 70.0, (12.9850, 77.5910)),
+        # home-shifting
+        ("Balaji Kumar", "Packer Mover", "home-shifting", 4.4, 6, 35.0, (12.9720, 77.5960)),
+        ("Sekhar Rao", "Packer Mover", "home-shifting", 4.6, 8, 38.0, (12.9800, 77.5900)),
+        ("Pradeep Kumar", "Packer Mover", "home-shifting", 4.1, 4, 30.0, (12.9750, 77.6020)),
+        ("Venkatesh Naidu", "Packer Mover", "home-shifting", 4.7, 10, 42.0, (12.9830, 77.5940)),
+        # gardening
+        ("Ramesh Kumar", "Gardener", "gardening", 4.5, 6, 24.0, (12.9730, 77.5930)),
+        ("Sudheer Yadav", "Gardener", "gardening", 4.3, 4, 20.0, (12.9790, 77.5980)),
+        ("Prakash Rao", "Gardener", "gardening", 4.6, 8, 28.0, (12.9750, 77.5870)),
+        ("Madhu Kumar", "Gardener", "gardening", 4.1, 3, 18.0, (12.9810, 77.6010)),
+        # beauty-at-home
+        ("Nisha Sharma", "Beautician", "beauty-at-home", 4.8, 6, 40.0, (12.9700, 77.5940)),
+        ("Pooja Verma", "Beautician", "beauty-at-home", 4.6, 5, 35.0, (12.9780, 77.5900)),
+        ("Ritu Gupta", "Beautician", "beauty-at-home", 4.4, 4, 30.0, (12.9740, 77.6020)),
+        ("Neha Rao", "Beautician", "beauty-at-home", 4.7, 7, 45.0, (12.9820, 77.5960)),
+        # spa-massage
+        ("Kavya Nair", "Massage Therapist", "spa-massage", 4.7, 6, 50.0, (12.9720, 77.5910)),
+        ("Sneha Kumar", "Massage Therapist", "spa-massage", 4.5, 4, 42.0, (12.9790, 77.5970)),
+        ("Anusha Rao", "Massage Therapist", "spa-massage", 4.3, 5, 38.0, (12.9750, 77.5880)),
+        ("Divya Nair", "Massage Therapist", "spa-massage", 4.8, 8, 55.0, (12.9810, 77.6000)),
+        # cooking-home-chef
+        ("Sangeetha Iyer", "Home Chef", "cooking-home-chef", 4.9, 8, 60.0, (12.9710, 77.5950)),
+        ("Radhika Menon", "Home Chef", "cooking-home-chef", 4.7, 6, 50.0, (12.9780, 77.5900)),
+        ("Latha Devi", "Home Chef", "cooking-home-chef", 4.5, 5, 45.0, (12.9740, 77.6020)),
+        ("Usha Reddy", "Home Chef", "cooking-home-chef", 4.6, 7, 55.0, (12.9830, 77.5930)),
+        # home-tutor
+        ("Anand Kumar", "Home Tutor", "home-tutor", 4.8, 6, 50.0, (12.9730, 77.5940)),
+        ("Shalini Rao", "Home Tutor", "home-tutor", 4.6, 5, 45.0, (12.9800, 77.5980)),
+        ("Bharath Iyer", "Home Tutor", "home-tutor", 4.4, 4, 40.0, (12.9760, 77.5870)),
+        ("Kavita Menon", "Home Tutor", "home-tutor", 4.7, 8, 55.0, (12.9820, 77.6010)),
+        # babysitting
+        ("Sunita Devi", "Babysitter", "babysitting", 4.8, 5, 30.0, (12.9700, 77.5920)),
+        ("Mary Thomas", "Babysitter", "babysitting", 4.6, 6, 28.0, (12.9770, 77.5960)),
+        ("Anita Kumar", "Babysitter", "babysitting", 4.4, 3, 25.0, (12.9750, 77.6030)),
+        ("Grace D'Souza", "Babysitter", "babysitting", 4.7, 7, 32.0, (12.9830, 77.5890)),
+        # elder-care
+        ("Rosy Fernandez", "Elder Care Nurse", "elder-care", 4.8, 7, 45.0, (12.9720, 77.5930)),
+        ("Selvi Raj", "Elder Care Attendant", "elder-care", 4.6, 6, 40.0, (12.9790, 77.5990)),
+        ("Janet Joseph", "Elder Care Nurse", "elder-care", 4.5, 5, 42.0, (12.9740, 77.5870)),
+        ("Lucy Mathew", "Elder Care Attendant", "elder-care", 4.7, 8, 48.0, (12.9810, 77.6000)),
+        # pet-care
+        ("Rakesh Patel", "Pet Caretaker", "pet-care", 4.7, 5, 35.0, (12.9730, 77.5950)),
+        ("Sonu Kumar", "Dog Walker", "pet-care", 4.5, 3, 25.0, (12.9780, 77.5900)),
+        ("Arun Menon", "Pet Groomer", "pet-care", 4.6, 6, 40.0, (12.9820, 77.5980)),
+        ("Bindu Rao", "Pet Caretaker", "pet-care", 4.4, 4, 30.0, (12.9690, 77.6010)),
+        # laundry
+        ("Selvam Kumar", "Laundry Specialist", "laundry", 4.5, 5, 18.0, (12.9710, 77.5900)),
+        ("Babu Rao", "Laundry Specialist", "laundry", 4.3, 4, 16.0, (12.9770, 77.5960)),
+        ("Chandra Shekar", "Laundry Specialist", "laundry", 4.6, 7, 20.0, (12.9750, 77.5880)),
+        ("Murugan Kumar", "Laundry Specialist", "laundry", 4.2, 3, 15.0, (12.9810, 77.6020)),
+        # car-wash
+        ("Antony Raj", "Car Washer", "car-wash", 4.6, 5, 30.0, (12.9720, 77.5940)),
+        ("Joseph Kumar", "Car Washer", "car-wash", 4.4, 4, 26.0, (12.9790, 77.5990)),
+        ("Selva Kumar", "Car Washer", "car-wash", 4.7, 6, 32.0, (12.9740, 77.5870)),
+        ("Rajesh Naik", "Car Washer", "car-wash", 4.2, 3, 24.0, (12.9810, 77.6000)),
+    ]
+
+    all_cat_slugs = [
+        "plumbing", "electrical", "cleaning", "ac-repair", "home-painting",
+        "carpentry", "pest-control", "appliance-repair", "refrigerator-repair",
+        "washing-machine-repair", "tv-repair", "ro-water-purifier", "cctv-installation",
+        "interior-design", "home-shifting", "gardening", "beauty-at-home",
+        "spa-massage", "cooking-home-chef", "home-tutor", "babysitting",
+        "elder-care", "pet-care", "laundry", "car-wash",
     ]
 
     cats = {}
-    for slug in ["plumbing", "electrical", "cleaning", "ac-repair"]:
+    for slug in all_cat_slugs:
         c = db.query(Category).filter(Category.slug == slug).first()
         if c:
             cats[slug] = c
 
     workers = []
-    for wname, prof, cat_slug, rating, exp, rate, (lat, lng) in worker_data:
+    for w_idx, (wname, prof, cat_slug, rating, exp, rate, (lat, lng)) in enumerate(worker_data):
         u = User(
-            email=f"{wname.split()[0].lower()}@demo.com",
+            email=f"worker{w_idx + 1}.{cat_slug}@demo.com",
             phone=None,
             password_hash=pw,
             role=UserRole.WORKER,

@@ -77,7 +77,7 @@ def list_bookings(
     items = query.order_by(Booking.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
     return {
         "success": True, "message": "OK",
-        "data": [{"id": b.id, "status": b.status.value if b.status else "pending", "final_price": b.final_price, "created_at": b.created_at.isoformat() if b.created_at else None} for b in items],
+        "data": [{"id": b.id, "status": b.status.value if b.status else "pending", "final_price": b.final_price, "scheduled_date": b.scheduled_date, "created_at": b.created_at.isoformat() if b.created_at else None} for b in items],
         "total": total, "page": page, "limit": limit, "pages": (total + limit - 1) // limit if total > 0 else 0,
     }
 

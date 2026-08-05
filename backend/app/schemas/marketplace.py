@@ -112,6 +112,8 @@ class BookingCreateRequest(SchemaBase):
     address: dict
     coupon_code: Optional[str] = None
     problem_images: Optional[List[str]] = None
+    booking_type: Optional[str] = "scheduled"
+    is_emergency: bool = False
 
 
 class BookingStatusUpdateRequest(SchemaBase):
@@ -141,6 +143,8 @@ class BookingResponse(SchemaBase):
     final_price: float
     eta_minutes: Optional[int] = None
     distance_km: Optional[float] = None
+    booking_type: str = "scheduled"
+    is_emergency: bool = False
 
 
 class BookingDetailResponse(BookingResponse):

@@ -31,6 +31,10 @@ class StartVerificationRequest(SchemaBase):
     profession: Optional[str] = Field(None, max_length=255)
 
 
+class SkillTestGenerateRequest(SchemaBase):
+    language: Optional[str] = Field(None, max_length=20)
+
+
 # ----------------------------------------------------------
 # HELPERS
 # ----------------------------------------------------------
@@ -196,11 +200,14 @@ def submit_documents(
 
 @router.post("/skill-test/generate", summary="Generate AI technical test questions")
 def generate_skill_test(
+    body: SkillTestGenerateRequest,
     current_user: User = Depends(RequireWorker),
     db: Session = Depends(get_db),
 ):
     worker = _get_worker(db, current_user)
     verification = _get_in_progress_verification(db, worker)
+
+    language = body.language if body.language in vs.SUPPORTED_TEST_LANGUAGES else "en"
 
     session = _get_skill_test(db, verification)
     if session is None:
@@ -214,8 +221,12 @@ def generate_skill_test(
         db.add(session)
         db.flush()
 
-    if not session.questions:
-        questions = vs.generate_skill_test_questions(verification.profession)
+    stored_language = None
+    if session.questions:
+        stored_language = (session.questions[0] or {}).get("language", "en")
+
+    if not session.questions or stored_language != language:
+        questions = vs.generate_skill_test_questions(verification.profession, language)
         session.questions = questions
         verification.step = "skill_test"
         db.commit()
@@ -227,6 +238,7 @@ def generate_skill_test(
         "data": {
             "session_id": session.id,
             "profession": session.profession,
+            "language": language,
             "questions": vs.public_questions(session.questions or []),
             "tab_switch_count": session.tab_switch_count,
             "status": session.status,

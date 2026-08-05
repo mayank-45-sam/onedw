@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -11,8 +12,10 @@ from app.schemas.marketplace import (
     ReviewCreateRequest,
 )
 from app.services.booking_service import BookingService
+from app.services.instant_booking_service import create_instant_booking, find_nearest_workers
 from app.services.review_service import ReviewService
 from app.core.exceptions import BadRequestException, ForbiddenException
+from app.schemas.common import SchemaBase
 
 router = APIRouter(prefix="", tags=["Bookings", "Reviews"])
 
@@ -54,6 +57,8 @@ def _serialize_booking(b) -> dict:
         "final_price": b.final_price,
         "eta_minutes": b.eta_minutes,
         "distance_km": b.distance_km,
+        "booking_type": b.booking_type.value if hasattr(b.booking_type, "value") else b.booking_type,
+        "is_emergency": b.is_emergency,
         "service": {"id": svc.id, "name": svc.name, "image": svc.image} if svc else None,
         "worker": {"id": wrk.id, "name": wrk.name, "profession": wrk.profession, "avatar": wrk.avatar} if wrk else None,
         "customer": {"id": cust.id, "name": cust.name, "avatar": cust.avatar} if cust else None,
@@ -88,6 +93,8 @@ def create_booking(
         worker_id=body.worker_id,
         coupon_code=body.coupon_code,
         problem_images=body.problem_images,
+        booking_type=body.booking_type,
+        is_emergency=body.is_emergency,
     )
     return {
         "success": True,
@@ -205,6 +212,101 @@ def get_recent_bookings(
 
     return {"success": True, "message": "OK", "data": [_serialize_booking(b) for b in bookings]}
 
+
+# ============================================================
+# INSTANT & EMERGENCY BOOKING (new feature)
+# ============================================================
+
+class InstantBookingRequest(SchemaBase):
+    service_id: str
+    problem_description: str = Field(..., min_length=5, max_length=2000)
+    scheduled_date: str = Field(..., max_length=20)
+    scheduled_time: str = Field(..., max_length=20)
+    address: dict
+    customer_lat: Optional[float] = Field(None, ge=-90, le=90)
+    customer_lng: Optional[float] = Field(None, ge=-180, le=180)
+    is_emergency: bool = False
+    coupon_code: Optional[str] = None
+    problem_images: Optional[List[str]] = None
+
+
+class NearbyWorkerRequest(SchemaBase):
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    service_id: Optional[str] = None
+    radius_km: float = Field(10.0, gt=0, le=100)
+    limit: int = Field(8, ge=1, le=50)
+
+
+@router.get(
+    "/bookings/nearby-workers",
+    summary="Find nearest available workers for instant booking",
+)
+def get_nearby_workers_for_booking(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    service_id: Optional[str] = Query(None),
+    radius_km: float = Query(10.0, gt=0, le=100),
+    limit: int = Query(8, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Return online workers near the given location, ranked by ETA."""
+    workers = find_nearest_workers(
+        db,
+        lat=lat,
+        lng=lng,
+        service_id=service_id,
+        radius_km=radius_km,
+        limit=limit,
+    )
+    return {"success": True, "message": "Nearby workers retrieved", "data": workers}
+
+
+@router.post(
+    "/bookings/instant",
+    status_code=201,
+    summary="Create an instant or emergency booking",
+)
+def create_instant_booking_endpoint(
+    body: InstantBookingRequest,
+    current_user: User = Depends(RequireCustomer),
+    db: Session = Depends(get_db),
+):
+    """Create an instant or emergency booking with auto worker assignment.
+
+    If no nearby worker is available, falls back to a regular scheduled booking
+    and the response includes ``fallback: true`` with a helpful message.
+    Emergency bookings apply a 20% surge to the price.
+    """
+    from app.models.customer import Customer
+    cust = db.query(Customer).filter(Customer.user_id == current_user.id).first()
+    if cust is None:
+        raise BadRequestException(message="Customer profile not found")
+
+    result = create_instant_booking(
+        db,
+        customer_id=cust.id,
+        service_id=body.service_id,
+        problem_description=body.problem_description,
+        scheduled_date=body.scheduled_date,
+        scheduled_time=body.scheduled_time,
+        address=body.address,
+        customer_lat=body.customer_lat,
+        customer_lng=body.customer_lng,
+        is_emergency=body.is_emergency,
+        coupon_code=body.coupon_code,
+        problem_images=body.problem_images,
+    )
+    return {
+        "success": True,
+        "message": "Instant booking created successfully" if not result.get("fallback") else result.get("message", "Booking created with fallback"),
+        "data": result,
+    }
+
+
+# ============================================================
+# BOOKING DETAIL
+# ============================================================
 
 @router.get(
     "/bookings/{booking_id}",

@@ -15,6 +15,7 @@ from app.models.wallet_transaction import WalletTransaction, TransactionType, Tr
 from app.models.review import Review
 from app.models.complaint import Complaint
 from app.models.notification import Notification
+from app.models.broadcast import Broadcast
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.portfolio_image import PortfolioImage
@@ -28,6 +29,13 @@ from app.models.otp import OTP
 from app.models.ai_chat import ChatSession, ChatMessage
 from app.models.fraud import WorkerFraudData, FraudReport, SuspiciousActivity
 from app.models.image_analysis import ImageAnalysis
+from app.models.bidding import (
+    CustomJob,
+    CustomJobStatus,
+    JobBid,
+    BidStatus,
+    NegotiationMessage,
+)
 from app.models.verification import (
     WorkerVerification,
     SkillTestSession,
@@ -58,6 +66,7 @@ __all__ = [
     "Review",
     "Complaint",
     "Notification",
+    "Broadcast",
     "Conversation",
     "Message",
     "PortfolioImage",
@@ -79,4 +88,9 @@ __all__ = [
     "PracticalAssessment",
     "VoiceInterview",
     "VerificationCertificate",
+    "CustomJob",
+    "CustomJobStatus",
+    "JobBid",
+    "BidStatus",
+    "NegotiationMessage",
 ]

@@ -2,6 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, or_
 
+from app.models.category import Category
 from app.models.worker import Worker
 from app.repositories.base import BaseRepository
 
@@ -31,13 +32,19 @@ class WorkerRepository(BaseRepository[Worker]):
             query = query.filter(Worker.category_ids.contains(category_id))
         if search:
             term = f"%{search.strip()}%"
-            query = query.filter(
-                or_(
-                    Worker.name.ilike(term),
-                    Worker.profession.ilike(term),
-                    Worker.bio.ilike(term),
-                )
-            )
+            filters = [
+                Worker.name.ilike(term),
+                Worker.profession.ilike(term),
+                Worker.bio.ilike(term),
+            ]
+            matching_cat_ids = [
+                cid for (cid,) in self.db.query(Category.id).filter(
+                    or_(Category.name.ilike(term), Category.slug.ilike(term))
+                ).all()
+            ]
+            if matching_cat_ids:
+                filters.append(or_(*[Worker.category_ids.contains(cid) for cid in matching_cat_ids]))
+            query = query.filter(or_(*filters))
         if min_rating is not None:
             query = query.filter(Worker.rating >= min_rating)
         if min_experience is not None:

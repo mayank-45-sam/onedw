@@ -10,11 +10,18 @@ from app.db.database import get_db
 from app.dependencies.auth import get_current_user, get_optional_user
 from app.models.user import User
 from app.models.ai_chat import ChatSession, ChatMessage
+from app.models.category import Category
 from app.schemas.common import SchemaBase
 from app.services.ai_chat import stream_chat, service_assistant, analyze_image_vision
 from app.core.exceptions import NotFoundException, BadRequestException
 
 router = APIRouter(prefix="/ai", tags=["AI Chat"])
+
+
+def _available_categories(db: Session) -> list[str]:
+    """Return the service category names currently offered on the platform."""
+    rows = db.query(Category.name).order_by(Category.name.asc()).all()
+    return [name for (name,) in rows]
 
 
 class ChatRequest(SchemaBase):
@@ -88,7 +95,8 @@ async def chat(
 
     async def generate():
         full_response = []
-        async for chunk in stream_chat(llm_messages, language=body.language):
+        categories = _available_categories(db)
+        async for chunk in stream_chat(llm_messages, language=body.language, available_categories=categories):
             full_response.append(chunk)
             yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
@@ -195,8 +203,9 @@ def delete_session(
 async def service_assistant_endpoint(
     body: ServiceAssistantRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    result = await service_assistant(body.problem, language=body.language)
+    result = await service_assistant(body.problem, language=body.language, available_categories=_available_categories(db))
     return {"success": True, "data": result}
 
 

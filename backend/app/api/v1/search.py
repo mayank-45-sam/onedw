@@ -130,14 +130,28 @@ def search(
 
     if q:
         term = f"%{q}%"
-        svc_results = db.query(Service).filter(
-            or_(Service.name.ilike(term), Service.description.ilike(term))
+        cat_ids = [
+            cid for (cid,) in db.query(Category.id).filter(
+                or_(Category.name.ilike(term), Category.slug.ilike(term))
+            ).all()
+        ]
+        svc_results = db.query(Service).outerjoin(Category, Service.category_id == Category.id).filter(
+            or_(
+                Service.name.ilike(term),
+                Service.description.ilike(term),
+                Category.name.ilike(term),
+                Category.slug.ilike(term),
+            )
         ).limit(limit).all()
         services = [_serialize_service(s) for s in svc_results]
 
-        wrk_results = db.query(Worker).filter(
-            or_(Worker.name.ilike(term), Worker.profession.ilike(term))
-        ).limit(limit).all()
+        worker_filters = [
+            Worker.name.ilike(term),
+            Worker.profession.ilike(term),
+        ]
+        if cat_ids:
+            worker_filters.append(or_(*[Worker.category_ids.contains(cid) for cid in cat_ids]))
+        wrk_results = db.query(Worker).filter(or_(*worker_filters)).limit(limit).all()
         workers = [_serialize_worker(w) for w in wrk_results]
 
         cats = db.query(Category).filter(Category.name.ilike(term)).limit(5).all()

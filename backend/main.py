@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import asyncio
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +16,7 @@ from app.api.v1.router import api_router
 from app.db.database import check_database_connection, engine
 from app.utils.paths import ensure_directory
 from app.seeds.startup_seed import run_startup_seed
+from app.services.broadcast_service import broadcast_scheduler_loop
 
 
 # Setup logging
@@ -41,8 +43,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Database connection unavailable at startup")
 
+    # Background loop that dispatches scheduled broadcasts when their time arrives.
+    scheduler_task = asyncio.create_task(broadcast_scheduler_loop())
+
     yield
 
+    scheduler_task.cancel()
+    logger.info("Broadcast scheduler stopped")
     logger.info(f"Shutting down {settings.APP_NAME}")
     engine.dispose()
     logger.info("Database connection pool disposed")

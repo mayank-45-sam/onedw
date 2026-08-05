@@ -5,7 +5,10 @@ import httpx
 from app.core.config import settings
 from loguru import logger
 
-SYSTEM_PROMPT = """You are OneDW Assistant, a friendly AI assistant for home services.
+SYSTEM_PROMPT_TEMPLATE = """You are OneDW Assistant, a friendly AI assistant for home services in India.
+
+Available service categories on this platform:
+{available_categories}
 
 Rules:
 - Respond like a human, not like an API.
@@ -15,9 +18,11 @@ Rules:
 - Keep responses short and easy to understand.
 - Greet the user naturally.
 - Understand the user's problem and guide them step by step.
+- Always quote prices in Indian Rupees (₹), never in dollars ($) or any other currency.
+- Detect the service category from the user's message using ONLY the available categories listed above. Never invent a category that is not listed.
 - If the user writes in Tamil (தமிழ்), ALWAYS respond in Tamil or Tanglish (Tamil mixed with simple English words). Never switch to English-only for Tamil input. Even if your Tamil voice is robotic, always write in Tamil/Tanglish.
 - When you know the service category, mention it naturally.
-- If you can estimate a price, write it in a sentence instead of JSON.
+- If you can estimate a price, write it in a sentence in ₹ instead of JSON.
 - At the end, suggest booking a worker if appropriate.
 
 Language rules:
@@ -37,21 +42,28 @@ Assistant: I can help with that. It sounds like an electrical issue. Is the flic
 
 User: Only one room.
 
-Assistant: Thanks! This could be caused by a loose bulb, faulty switch, or wiring issue. I recommend booking an electrician to inspect it. The typical inspection cost is around $10–$20. Would you like me to help you book an electrician?
+Assistant: Thanks! This could be caused by a loose bulb, faulty switch, or wiring issue. I recommend booking an electrician to inspect it. The typical inspection cost is around ₹200–₹500. Would you like me to help you book an electrician?
 
 User: என் குழாய் லீக் ஆகுது
 
 Assistant: Sari... water off pannunga... tape wrap pannunga... temporary fix dhaan... plumber venuma?
 
 Quick suggestions when greeting a user:
-1. 🔧 Plumbing Issue
-2. ⚡ Electrical Problem
-3. ❄️ AC / Appliance Repair
-4. 🐜 Pest Control
-5. 🧹 Cleaning Service
-6. 📅 Book a Professional"""
+- Ask what home problem they need help with.
+- Offer help with pricing, booking a professional, or one of the categories listed above."""
 
-SERVICE_ASSISTANT_PROMPT = """You are a Service Assistant AI for a service marketplace app.
+
+def build_system_prompt(available_categories: list[str] | None = None) -> str:
+    """Build the chat system prompt, injecting the platform's service categories."""
+    categories = available_categories or []
+    section = (
+        "\n".join(f"- {c}" for c in categories)
+        if categories
+        else "- The categories currently offered on the platform."
+    )
+    return SYSTEM_PROMPT_TEMPLATE.format(available_categories=section)
+
+SERVICE_ASSISTANT_PROMPT_TEMPLATE = """You are a Service Assistant AI for a service marketplace app.
 
 Your job is to:
 1. Understand the user's problem (text or image description)
@@ -61,12 +73,15 @@ Your job is to:
 
 Always respond in clean JSON format and NOTHING else. Never return empty objects {}.
 
+Available service categories on this platform:
+{available_categories}
+
 For service-related problems, respond with this JSON:
 
 {
   "message": "Explain the problem in simple words and suggest solution",
-  "service_category": "Electrician / Plumber / AC Repair / Cleaning / Painting / General Maintenance",
-  "estimated_price": "Give a realistic range like $10-$30",
+  "service_category": "One of the available categories that best matches the problem",
+  "estimated_price": "Give a realistic range in Indian Rupees like ₹300-₹800",
   "problem_summary": "Brief 1-2 sentence summary of the problem",
   "actions": [
     {
@@ -74,9 +89,9 @@ For service-related problems, respond with this JSON:
       "label": "Book Service",
       "route": "/booking",
       "payload": {
-        "service": "Electrician",
-        "price": "$15-$40",
-        "problem": "Fan not working"
+        "service": "The detected category name",
+        "price": "₹500-₹1,000",
+        "problem": "The user's problem in a few words"
       }
     },
     {
@@ -84,8 +99,8 @@ For service-related problems, respond with this JSON:
       "label": "Contact Worker",
       "route": "/workers",
       "payload": {
-        "service": "Electrician",
-        "problem": "Fan not working"
+        "service": "The detected category name",
+        "problem": "The user's problem in a few words"
       }
     },
     {
@@ -108,38 +123,51 @@ For queries NOT related to home/service problems (e.g., asking about a person, h
 }
 
 Rules:
+- Always quote prices in Indian Rupees (₹), never in dollars ($) or any other currency.
 - Always include route and payload in every action
 - Payload must contain real values (not variable names or placeholders)
 - For schedule action, payload is an empty object {}
 - For valid service problems, always include all 3 actions
 - If no meaningful payload data, include empty payload {}
-- Service categories must be ONE of: Electrician, Plumber, AC Repair, Cleaning, Painting, General Maintenance
+- Detect the service category from the user's problem using ONLY the available categories listed above
 - Respond in the same language the user writes in
 
 Examples:
 User: "My fan is not working"
-→ Electrician, $15-$40
+→ Electrician, ₹500-₹1,000
 
 User: "Who is Albert Einstein?"
 → service_category: null, estimated_price: null, problem_summary: null, actions: []
 
 User: "I uploaded a photo of a leaking pipe"
-→ Plumber, $20-$50
+→ Plumbing, ₹500-₹1,500
 
 User: "My AC is not cooling"
-→ AC Repair, $25-$60
+→ AC Repair, ₹800-₹2,500
 
 User: "I need my house cleaned"
-→ Cleaning, $10-$30
+→ Cleaning, ₹350-₹1,000
 
 User: "I want to paint my room"
-→ Painting, $30-$80
+→ Home Painting, ₹2,000-₹8,000
 """
+
+
+def build_service_assistant_prompt(available_categories: list[str] | None = None) -> str:
+    """Build the service assistant prompt, injecting the platform's service categories."""
+    categories = available_categories or []
+    section = (
+        "\n".join(f"- {c}" for c in categories)
+        if categories
+        else "- The categories currently offered on the platform."
+    )
+    return SERVICE_ASSISTANT_PROMPT_TEMPLATE.format(available_categories=section)
 
 
 async def stream_chat(
     messages: list[dict],
     language: str = "en",
+    available_categories: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat completion response from the configured LLM provider."""
     if not settings.AI_API_KEY:
@@ -151,7 +179,7 @@ async def stream_chat(
         "Content-Type": "application/json",
     }
 
-    system_msg = {"role": "system", "content": SYSTEM_PROMPT}
+    system_msg = {"role": "system", "content": build_system_prompt(available_categories)}
     payload = {
         "model": settings.AI_MODEL,
         "messages": [system_msg] + messages,
@@ -222,13 +250,14 @@ def _strip_json_markdown(content: str) -> str:
 async def service_assistant(
     problem: str,
     language: str = "en",
+    available_categories: list[str] | None = None,
 ) -> dict:
     """Analyze a user's problem and return structured service assistance as JSON."""
     if not settings.AI_API_KEY:
         return {
             "message": "AI service is not configured. Please contact support.",
             "service_category": "General Maintenance",
-            "estimated_price": "$0-$0",
+            "estimated_price": "₹0-₹0",
             "actions": [
                 {"type": "book", "label": "Book Service"},
                 {"type": "contact", "label": "Contact Worker"},
@@ -241,7 +270,7 @@ async def service_assistant(
         "Content-Type": "application/json",
     }
 
-    system_msg = {"role": "system", "content": SERVICE_ASSISTANT_PROMPT}
+    system_msg = {"role": "system", "content": build_service_assistant_prompt(available_categories)}
     user_msg = {"role": "user", "content": problem}
     payload = {
         "model": settings.AI_MODEL,
@@ -274,7 +303,7 @@ async def service_assistant(
                 return {
                     "message": msg,
                     "service_category": "General Maintenance",
-                    "estimated_price": "$0-$0",
+                    "estimated_price": "₹0-₹0",
                     "actions": [
                         {"type": "book", "label": "Book Service"},
                         {"type": "contact", "label": "Contact Worker"},
@@ -301,7 +330,7 @@ async def service_assistant(
                 return {
                     "message": content if content else "Unable to analyze your request.",
                     "service_category": "General Maintenance",
-                    "estimated_price": "$0-$0",
+                    "estimated_price": "₹0-₹0",
                     "actions": [
                         {"type": "book", "label": "Book Service"},
                         {"type": "contact", "label": "Contact Worker"},
@@ -313,7 +342,7 @@ async def service_assistant(
         return {
             "message": "The request timed out. Please try again.",
             "service_category": "General Maintenance",
-            "estimated_price": "$0-$0",
+            "estimated_price": "₹0-₹0",
             "actions": [
                 {"type": "book", "label": "Book Service"},
                 {"type": "contact", "label": "Contact Worker"},
@@ -324,7 +353,7 @@ async def service_assistant(
         return {
             "message": "Could not connect to AI service. Please try again later.",
             "service_category": "General Maintenance",
-            "estimated_price": "$0-$0",
+            "estimated_price": "₹0-₹0",
             "actions": [
                 {"type": "book", "label": "Book Service"},
                 {"type": "contact", "label": "Contact Worker"},
@@ -336,7 +365,7 @@ async def service_assistant(
         return {
             "message": "An unexpected error occurred. Please try again.",
             "service_category": "General Maintenance",
-            "estimated_price": "$0-$0",
+            "estimated_price": "₹0-₹0",
             "actions": [
                 {"type": "book", "label": "Book Service"},
                 {"type": "contact", "label": "Contact Worker"},
