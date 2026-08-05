@@ -26,15 +26,16 @@ export function CategoryCard({ category, index = 0 }: CategoryCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.04 }}
-      whileHover={{ y: -6, scale: 1.03 }}
+      whileHover={{ y: -6, scale: 1.02 }}
       whileTap={{ scale: 0.97 }}
     >
       <Link
         to={`/services?category=${category.slug}`}
-        className="group flex flex-col items-center gap-3 rounded-2xl border border-border/50 bg-card p-5 text-center shadow-card transition-all duration-300 hover:border-border hover:shadow-card-hover hover:bg-accent/30 sm:p-6"
+        className="group flex flex-col items-center gap-3.5 rounded-2xl border border-border/50 bg-card p-5 text-center transition-all duration-300 hover:border-primary/30 hover:bg-primary/3 [box-shadow:0_2px_8px_rgb(15_23_42/0.06)] hover:[box-shadow:0_12px_40px_rgb(15_23_42/0.12),0_4px_16px_rgb(15_23_42/0.08)] sm:p-6"
       >
+        {/* Icon container */}
         <div
-          className={`relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} shadow-lg transition-all duration-300 group-hover:shadow-xl`}
+          className={`relative flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} shadow-md transition-all duration-300 group-hover:shadow-xl group-hover:scale-105`}
         >
           {hasImage ? (
             <img
@@ -45,19 +46,20 @@ export function CategoryCard({ category, index = 0 }: CategoryCardProps) {
               onError={() => setImageError(true)}
             />
           ) : (
-            <Icon className="h-10 w-10 text-white drop-shadow-sm" />
+            <Icon className="h-9 w-9 text-white drop-shadow-sm" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-transparent" />
         </div>
 
+        {/* Text */}
         <div className="min-w-0 w-full">
-          <p className="truncate font-semibold font-display text-sm">{category.name}</p>
+          <p className="truncate font-bold font-display text-sm group-hover:text-primary transition-colors duration-200">{category.name}</p>
           {typeof category.serviceCount === 'number' && category.serviceCount > 0 && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground font-medium">
               {category.serviceCount} service{category.serviceCount !== 1 ? 's' : ''}
             </p>
           )}
-          <div className="mt-1 flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
             {typeof professionalCount === 'number' && professionalCount > 0 && (
               <span className="flex items-center gap-0.5">
                 <Users className="h-3 w-3" /> {professionalCount} pros
@@ -71,7 +73,8 @@ export function CategoryCard({ category, index = 0 }: CategoryCardProps) {
           </div>
         </div>
 
-        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100" />
+        {/* Arrow */}
+        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100 group-hover:text-primary" />
       </Link>
     </motion.div>
   );

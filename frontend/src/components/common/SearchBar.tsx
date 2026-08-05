@@ -11,14 +11,14 @@ import { cn } from '@/lib/utils';
 const QUICK_QUERIES = ['Plumber', 'Deep clean', 'AC repair', 'Electrician', 'Salon at home'];
 
 const INDIAN_CITIES = [
-  'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai',
+  'Pondicherry', 'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai',
   'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow',
 ];
 
 export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
-  const [location, setLocation] = useState('Mumbai');
+  const [location, setLocation] = useState('Pondicherry');
   const [open, setOpen] = useState(false);
 
   const { data: suggestions } = useQuery({
@@ -46,33 +46,33 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
           const nearestCity = findNearestCity(latitude, longitude);
           if (nearestCity) setLocation(nearestCity);
         },
-        () => setLocation('Mumbai')
+        () => setLocation('Pondicherry')
       );
     }
   };
 
   return (
     <div className={cn('relative w-full', variant === 'hero' ? 'max-w-2xl' : 'max-w-md')}>
-      <div className="glass flex items-center gap-2 rounded-2xl p-2 shadow-card">
-        <div className="flex items-center gap-1.5 border-r pr-2 text-sm text-muted-foreground">
-          <MapPin className="h-4 w-4 text-primary" />
+      <div className="flex items-center gap-2 rounded-2xl bg-white/95 dark:bg-card/95 p-2 backdrop-blur-xl border border-white/50 dark:border-border/60 [box-shadow:0_8px_32px_rgb(15_23_42/0.18),0_2px_8px_rgb(15_23_42/0.12)]">
+        <div className="flex items-center gap-1.5 border-r border-border/60 pr-3 pl-1 text-sm text-muted-foreground">
+          <MapPin className="h-4 w-4 text-primary shrink-0" />
           <input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="w-24 bg-transparent outline-none"
+            className="w-20 bg-transparent outline-none text-foreground text-sm font-medium placeholder:text-muted-foreground"
             aria-label="Location"
             placeholder="City"
           />
           <button
             onClick={detectLocation}
-            className="text-primary hover:text-primary/80 transition"
+            className="text-primary hover:text-primary/80 transition shrink-0"
             title="Use current location"
             aria-label="Use current location"
           >
             <Navigation className="h-3.5 w-3.5" />
           </button>
         </div>
-        <Search className="h-5 w-5 text-muted-foreground" />
+        <Search className="h-5 w-5 text-muted-foreground shrink-0 ml-1" />
         <input
           value={q}
           onChange={(e) => {
@@ -82,15 +82,20 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="What service do you need?"
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground text-foreground"
           aria-label="Search services"
         />
         {q && (
-          <button onClick={() => setQ('')} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => setQ('')} className="text-muted-foreground hover:text-foreground transition shrink-0">
             <X className="h-4 w-4" />
           </button>
         )}
-        <Button onClick={() => submit()} className="btn-glow rounded-xl" size="sm">
+        <Button
+          onClick={() => submit()}
+          className="btn-glow rounded-xl bg-brand-gradient text-white shrink-0 gap-1.5 font-bold px-5"
+          size="sm"
+        >
+          <Search className="h-4 w-4" />
           Search
         </Button>
       </div>
@@ -184,6 +189,7 @@ export function SearchBar({ variant = 'hero' }: { variant?: 'hero' | 'compact' }
 
 function findNearestCity(lat: number, lng: number): string | null {
   const cities: { name: string; lat: number; lng: number }[] = [
+    { name: 'Pondicherry', lat: 11.9416, lng: 79.8083 },
     { name: 'Mumbai', lat: 19.076, lng: 72.8777 },
     { name: 'Delhi', lat: 28.7041, lng: 77.1025 },
     { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
@@ -201,5 +207,5 @@ function findNearestCity(lat: number, lng: number): string | null {
     const d = Math.hypot(lat - c.lat, lng - c.lng);
     if (d < bestDist) { bestDist = d; best = c; }
   }
-  return bestDist < 15 ? best.name : 'Mumbai';
+  return bestDist < 15 ? best.name : 'Pondicherry';
 }

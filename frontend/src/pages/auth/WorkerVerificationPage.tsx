@@ -801,7 +801,8 @@ export default function WorkerVerificationPage() {
 
     let attempt = 0;
     const rec = new SpeechRecognitionCtor();
-    rec.lang = 'en-IN';
+    const speechLangMap: Record<string, string> = { en: 'en-IN', tamil: 'ta-IN', hindi: 'hi-IN' };
+    rec.lang = speechLangMap[testLanguage] ?? 'en-IN';
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     listeningModeRef.current = 'recognition';
@@ -1488,8 +1489,11 @@ function SkillTestQuestionView({
     onListeningChange?.(voice.listening || voice.transcribing);
   }, [voice.listening, voice.transcribing, onListeningChange]);
 
+
+  const langAttr = question.language === 'tamil' ? 'ta' : question.language === 'hindi' ? 'hi' : 'en';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" lang={langAttr}>
       {question.imageUrl && (
         <div className="overflow-hidden rounded-2xl border">
           <img
@@ -1511,7 +1515,7 @@ function SkillTestQuestionView({
           {question.type === 'image' && 'Image question'}
           {question.type === 'short_answer' && 'Short answer'}
         </p>
-        <h3 className="mt-1 font-display text-lg font-semibold leading-relaxed">{question.question}</h3>
+        <h3 className="mt-1 font-display text-lg font-semibold leading-relaxed" lang={langAttr}>{question.question}</h3>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

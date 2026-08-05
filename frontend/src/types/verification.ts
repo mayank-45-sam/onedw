@@ -12,6 +12,7 @@ export interface SkillTestQuestion {
   difficulty: string;
   timeLimit: number;
   imageUrl: string | null;
+  language?: string;
 }
 
 export interface DocumentMedia {

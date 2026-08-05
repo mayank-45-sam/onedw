@@ -18,9 +18,10 @@ import {
   ShieldAlert,
   ShieldCheck,
   Megaphone,
+  ChevronLeft,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
@@ -40,6 +41,7 @@ interface NavItem {
   to: string;
   labelKey: MessageKey;
   icon: React.ComponentType<{ className?: string }>;
+  badge?: number;
 }
 
 const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
@@ -97,7 +99,7 @@ function UnreadBadge() {
   const count = data?.count ?? 0;
   if (count === 0) return null;
   return (
-    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-white">
+    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-white ring-2 ring-background">
       {count > 9 ? '9+' : count}
     </span>
   );
@@ -107,6 +109,12 @@ const PANEL_KEY_BY_ROLE: Record<UserRole, MessageKey> = {
   customer: 'nav.customerPanel',
   worker: 'nav.workerPanel',
   admin: 'nav.adminPanel',
+};
+
+const ROLE_COLORS: Record<UserRole, string> = {
+  customer: 'text-primary bg-primary/10',
+  worker: 'text-accent bg-accent/10',
+  admin: 'text-warning bg-warning/10',
 };
 
 export function DashboardLayout() {
@@ -130,50 +138,66 @@ export function DashboardLayout() {
 
     return (
       <div className="flex h-full flex-col">
-        <div className="flex h-16 items-center px-5">
-          {wrap(<Link to={ROUTES.home}><Logo /></Link>)}
+        {/* Logo header */}
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border/60 px-5">
+          {wrap(<Link to={ROUTES.home} className="flex items-center gap-2 transition-opacity hover:opacity-80"><Logo /></Link>)}
         </div>
-        <div className="px-3 pb-3">
-          <div className="flex items-center gap-3 rounded-2xl bg-muted/50 p-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={user?.avatar} />
-              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                {user ? initials(user.name) : 'U'}
-              </AvatarFallback>
-            </Avatar>
+
+        {/* User card */}
+        <div className="px-3 pt-4 pb-2">
+          <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-muted/60 to-muted/30 border border-border/40 p-3">
+            <div className="relative">
+              <Avatar className="h-10 w-10 ring-2 ring-background ring-offset-1 ring-offset-muted">
+                <AvatarImage src={user?.avatar} />
+                <AvatarFallback className="bg-primary/15 text-primary text-sm font-bold">
+                  {user ? initials(user.name) : 'U'}
+                </AvatarFallback>
+              </Avatar>
+              {/* Online dot */}
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-background" />
+            </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{user?.name ?? 'User'}</p>
-              <p className="truncate text-xs capitalize text-muted-foreground">{role}</p>
+              <p className="truncate text-sm font-bold leading-tight">{user?.name ?? 'User'}</p>
+              <span className={cn('mt-0.5 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize', ROLE_COLORS[role])}>
+                {role}
+              </span>
             </div>
           </div>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+
+        {/* Nav items */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3 scrollbar-thin">
           {nav.map((item) => {
             const Icon = item.icon;
-            const active = location.pathname === item.to;
+            const active = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
             return wrap(
               <NavLink
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                    isActive || active ? 'bg-primary text-primary-foreground shadow-glow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    'nav-item relative',
+                    (isActive && location.pathname.startsWith(item.to)) || (item.to === location.pathname)
+                      ? 'nav-item-active'
+                      : 'nav-item-idle'
                   )
                 }
               >
-                <Icon className="h-4.5 w-4.5" />
-                {t(item.labelKey)}
+                <Icon className="h-4.5 w-4.5 shrink-0" />
+                <span className="truncate">{t(item.labelKey)}</span>
               </NavLink>,
               item.to
             );
           })}
         </nav>
-        <div className="border-t p-3">
+
+        {/* Bottom sign out */}
+        <div className="shrink-0 border-t border-border/60 p-3">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-error transition hover:bg-error/10"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-error/10 hover:text-error group"
           >
-            <LogOut className="h-4 w-4" /> {t('nav.signOut')}
+            <LogOut className="h-4.5 w-4.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+            {t('nav.signOut')}
           </button>
         </div>
       </div>
@@ -181,42 +205,55 @@ export function DashboardLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted/20">
-      {/* desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
+    <div className="flex min-h-screen bg-muted/20 dark:bg-background">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-64 shrink-0 border-r border-border/60 bg-card shadow-sm lg:block">
         <div className="sticky top-0 h-screen">
           <SidebarContent />
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-xl md:px-6">
+        {/* Top header */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/60 bg-background/90 px-4 backdrop-blur-xl md:px-6">
           <div className="flex items-center gap-3">
+            {/* Mobile menu trigger */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Menu">
+                <Button variant="ghost" size="icon" className="rounded-xl lg:hidden" aria-label="Menu">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-0">
+              <SheetContent side="left" className="w-72 p-0 border-r">
                 <SidebarContent inSheet />
               </SheetContent>
             </Sheet>
-            <h1 className="font-semibold font-display">{t(PANEL_KEY_BY_ROLE[role])}</h1>
+
+            {/* Breadcrumb-style panel title */}
+            <div className="flex items-center gap-2">
+              <div className={cn('flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold', ROLE_COLORS[role])}>
+                {role === 'admin' ? '⚡' : role === 'worker' ? '🔧' : '👤'}
+              </div>
+              <h1 className="hidden text-sm font-semibold text-foreground sm:block">
+                {t(PANEL_KEY_BY_ROLE[role])}
+              </h1>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="icon" className="rounded-full relative" aria-label="Notifications">
+
+          {/* Header actions */}
+          <div className="flex items-center gap-1.5">
+            <Button asChild variant="ghost" size="icon" className="relative rounded-xl" aria-label="Notifications">
               <Link to={ROUTES.notifications}>
                 <Bell className="h-5 w-5" />
                 <UnreadBadge />
               </Link>
             </Button>
             <ThemeToggle />
-            <Button asChild variant="ghost" size="icon" className="rounded-full" aria-label="Profile">
+            <Button asChild variant="ghost" size="icon" className="rounded-xl" aria-label="Profile">
               <Link to={ROUTES.profile}>
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-8 w-8 ring-2 ring-primary/15 ring-offset-1">
                   <AvatarImage src={user?.avatar} />
-                  <AvatarFallback className="bg-primary/10 text-xs text-primary">
+                  <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
                     {user ? initials(user.name) : 'U'}
                   </AvatarFallback>
                 </Avatar>
@@ -225,15 +262,19 @@ export function DashboardLayout() {
           </div>
         </header>
 
+        {/* Page content */}
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            <Outlet />
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

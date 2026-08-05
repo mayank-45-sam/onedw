@@ -36,7 +36,13 @@ async def analyze_repair_image(
         logger.error(f"Image analysis failed: {e}")
         raise HTTPException(status_code=502, detail="AI couldn't analyze the image. Please try again.")
     except Exception as e:
+        err_str = str(e)
         logger.error(f"Image analysis error: {e}")
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="AI quota limit reached. The free Gemini API allows 20 requests/day. Please try again tomorrow or upgrade your Gemini API plan at https://aistudio.google.com"
+            )
         raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
 
 

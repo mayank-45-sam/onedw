@@ -4,7 +4,6 @@ import { Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { NearbyWorkersModal } from './NearbyWorkersModal';
-import { InstantBookingBadge } from './InstantBookingBadge';
 import { useMapGeolocation } from '@/hooks/useGeolocation';
 import type { MapLocation } from '@/components/common/MapView';
 import { bookingService } from '@/services/booking.service';
@@ -90,7 +89,6 @@ export function InstantBookingButton({ service, className, onBookingComplete }: 
         >
           <Zap className="mr-2 h-4 w-4" />
           Instant Booking
-          <InstantBookingBadge type="instant" className="absolute -top-2 -right-2 scale-75" />
         </Button>
       </motion.div>
 

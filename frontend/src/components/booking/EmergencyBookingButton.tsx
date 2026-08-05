@@ -8,7 +8,6 @@ import { bookingService } from '@/services/booking.service';
 import type { MapLocation } from '@/components/common/MapView';
 import toast from 'react-hot-toast';
 import type { Service } from '@/types';
-import { InstantBookingBadge } from './InstantBookingBadge';
 import { NearbyWorkersModal } from './NearbyWorkersModal';
 
 interface EmergencyBookingButtonProps {
@@ -97,7 +96,6 @@ export function EmergencyBookingButton({ service, className, onBookingComplete }
         >
           <AlertTriangle className="mr-2 h-4 w-4" />
           Emergency Booking
-          <InstantBookingBadge type="emergency" className="absolute -top-2 -right-2 scale-75" />
         </Button>
       </motion.div>
 

@@ -411,6 +411,8 @@ export default function BookingPage() {
             {step === 4 && (
               <Step key="s4">
                 <StepTitle title="Choose a worker" subtitle="Compare pros — or let our AI pick the best match." />
+
+                {/* ── Worker selection grid ── */}
                 {workersQuery.isLoading ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     {Array.from({ length: 4 }).map((_, i) => <WorkerCardSkeleton key={i} />)}
@@ -428,58 +430,92 @@ export default function BookingPage() {
                         key={w._id}
                         onClick={() => setSelectedWorker(w)}
                         className={cn(
-                          'card-premium flex items-center gap-3 p-4 text-left transition',
-                          selectedWorker?._id === w._id && 'border-primary ring-2 ring-primary/30',
+                          'group relative flex items-center gap-4 rounded-[18px] border bg-white p-4 text-left shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
+                          selectedWorker?._id === w._id
+                            ? 'border-blue-500 ring-2 ring-blue-200 shadow-blue-100'
+                            : 'border-gray-200 hover:border-blue-300',
                         )}
                       >
-                        <Avatar className="h-12 w-12">
+                        <Avatar className="h-14 w-14 shrink-0 border-2 border-white shadow">
                           <AvatarImage src={w.avatar} />
-                          <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                          <AvatarFallback className="bg-blue-50 text-sm font-bold text-blue-600">
                             {initials(w.name)}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1">
-                          <p className="font-medium line-clamp-1">{w.name}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-gray-900 line-clamp-1">{w.name}</p>
                           <StarRating rating={w.rating} size={12} showValue reviewCount={w.reviewCount} />
-                          <p className="text-xs text-muted-foreground">{formatCurrency(w.hourlyRate)}/hr</p>
+                          <p className="mt-0.5 text-sm font-bold text-gray-900">{formatCurrency(w.hourlyRate)}<span className="text-xs font-medium text-gray-400">/hr</span></p>
                         </div>
-                        {selectedWorker?._id === w._id && (
-                          <Check className="h-5 w-5 text-primary" />
+                        {selectedWorker?._id === w._id ? (
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600">
+                            <Check className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        ) : (
+                          <div className="h-6 w-6 shrink-0 rounded-full border-2 border-gray-200 group-hover:border-blue-400 transition-colors" />
                         )}
                       </button>
                     ))}
                   </div>
                 )}
 
-                {/* AI PRICE ESTIMATE + RECOMMENDED WORKERS */}
-                <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+                {/* ── AI section: Price estimator (full width) then Recommendations (full width) ── */}
+                <div className="mt-10 space-y-8">
+
+                  {/* Section header */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600">
+                      <Sparkles className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900 font-display">AI-Powered Booking Tools</h2>
+                      <p className="text-sm text-gray-500">Estimate your price &amp; compare top recommended pros</p>
+                    </div>
+                  </div>
+
+                  {/* ── Price Estimator — full width ── */}
                   <AIPriceEstimator
                     initialServiceId={selectedService?._id}
                     initialServiceName={selectedService?.name}
                   />
-                  <div className="card-premium p-6">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <h3 className="font-semibold font-display">AI worker recommendations</h3>
+
+                  {/* ── AI Worker Recommendations — full width, horizontal cards ── */}
+                  <div className="overflow-hidden rounded-[22px] border border-gray-200 bg-white shadow-[0_4px_32px_rgba(0,0,0,0.08)]">
+                    {/* Header */}
+                    <div className="border-b border-gray-100 px-6 py-5">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-violet-600" />
+                        <h3 className="font-bold text-gray-900 font-display">AI Worker Recommendations</h3>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Smart picks for &ldquo;{selectedService?.name}&rdquo; — fastest, budget, and premium.
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Smart picks for "{selectedService?.name}" — fastest, budget, and premium.
-                    </p>
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+
+                    {/* Cards — horizontal row, each card spans ~1/4 on desktop */}
+                    <div className="p-6">
                       {aiWorkersQuery.isLoading ? (
-                        Array.from({ length: 4 }).map((_, i) => <AICardSkeleton key={i} />)
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          {Array.from({ length: 4 }).map((_, i) => <AICardSkeleton key={i} />)}
+                        </div>
                       ) : !aiWorkersQuery.data?.items?.length ? (
-                        <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                          AI recommendations will appear here once available.
-                        </p>
+                        <div className="flex flex-col items-center py-12 text-center">
+                          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
+                            <Sparkles className="h-6 w-6 text-gray-400" />
+                          </div>
+                          <p className="text-sm font-semibold text-gray-500">AI recommendations will appear here</p>
+                          <p className="mt-1 text-xs text-gray-400">Make sure a service is selected above</p>
+                        </div>
                       ) : (
-                        aiWorkersQuery.data.items.slice(0, 4).map((w, i) => {
-                          const variant = i === 0 ? 'fastest' : i === 1 ? 'budget' : i === 2 ? 'highest-rated' : 'recommended';
-                          if (variant === 'budget') return <BudgetWorkerCard key={w._id} worker={w} estimatedPrice={w.hourlyRate} index={i} />;
-                          if (variant === 'fastest') return <FastestWorkerCard key={w._id} worker={w} index={i} />;
-                          if (variant === 'highest-rated') return <HighestRatedWorkerCard key={w._id} worker={w} index={i} />;
-                          return <AIWorkerCard key={w._id} worker={w} variant="recommended" index={i} />;
-                        })
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          {aiWorkersQuery.data.items.slice(0, 4).map((w, i) => {
+                            const variant = i === 0 ? 'fastest' : i === 1 ? 'budget' : i === 2 ? 'highest-rated' : 'recommended';
+                            if (variant === 'budget') return <BudgetWorkerCard key={w._id} worker={w} estimatedPrice={w.hourlyRate} index={i} />;
+                            if (variant === 'fastest') return <FastestWorkerCard key={w._id} worker={w} index={i} />;
+                            if (variant === 'highest-rated') return <HighestRatedWorkerCard key={w._id} worker={w} index={i} />;
+                            return <AIWorkerCard key={w._id} worker={w} variant="recommended" index={i} />;
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>

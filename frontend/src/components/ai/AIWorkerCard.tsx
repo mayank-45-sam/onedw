@@ -1,52 +1,59 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, Star, MapPin, Clock, Zap, ArrowRight, Sparkles, TrendingUp, Wallet, Briefcase, Globe } from 'lucide-react';
+import {
+  BadgeCheck, Star, MapPin, Clock, Zap, ArrowRight,
+  Sparkles, TrendingUp, Wallet, Briefcase, Globe, ShieldCheck,
+} from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/common/StarRating';
 import { formatCurrency, initials } from '@/utils/format';
 import { RecommendationReason } from '@/components/ai/RecommendationReason';
 import { buildRecommendationReason, workerToSignals } from '@/utils/recommendationReason';
 import { ROUTES } from '@/constants/routes';
+import { cn } from '@/lib/utils';
 import type { Worker } from '@/types';
 
 type AIVariant = 'recommended' | 'nearby' | 'budget' | 'fastest' | 'highest-rated';
 
 const VARIANT_CONFIG: Record<
   AIVariant,
-  { label: string; icon: React.ReactNode; accent: string; ring: string }
+  { label: string; icon: React.ReactNode; headerBg: string; badgeBg: string; accentColor: string }
 > = {
   recommended: {
     label: 'AI Pick',
-    icon: <Sparkles className="h-3.5 w-3.5" />,
-    accent: 'text-primary',
-    ring: 'bg-primary/10',
+    icon: <Sparkles className="h-3 w-3" />,
+    headerBg: 'from-blue-500/20 to-violet-500/10',
+    badgeBg: 'bg-blue-600',
+    accentColor: '#2563eb',
   },
   nearby: {
     label: 'Near You',
-    icon: <MapPin className="h-3.5 w-3.5" />,
-    accent: 'text-accent',
-    ring: 'bg-accent/10',
+    icon: <MapPin className="h-3 w-3" />,
+    headerBg: 'from-cyan-500/20 to-teal-400/10',
+    badgeBg: 'bg-cyan-600',
+    accentColor: '#0891b2',
   },
   budget: {
     label: 'Budget Pick',
-    icon: <Wallet className="h-3.5 w-3.5" />,
-    accent: 'text-success',
-    ring: 'bg-success/10',
+    icon: <Wallet className="h-3 w-3" />,
+    headerBg: 'from-emerald-500/20 to-green-400/10',
+    badgeBg: 'bg-emerald-600',
+    accentColor: '#059669',
   },
   fastest: {
     label: 'Fastest',
-    icon: <Zap className="h-3.5 w-3.5" />,
-    accent: 'text-warning',
-    ring: 'bg-warning/10',
+    icon: <Zap className="h-3 w-3" />,
+    headerBg: 'from-amber-500/20 to-orange-400/10',
+    badgeBg: 'bg-amber-500',
+    accentColor: '#d97706',
   },
   'highest-rated': {
     label: 'Top Rated',
-    icon: <TrendingUp className="h-3.5 w-3.5" />,
-    accent: 'text-rose-500',
-    ring: 'bg-rose-500/10',
+    icon: <TrendingUp className="h-3 w-3" />,
+    headerBg: 'from-rose-500/20 to-pink-400/10',
+    badgeBg: 'bg-rose-600',
+    accentColor: '#e11d48',
   },
 };
 
@@ -70,7 +77,6 @@ export function AIWorkerCard({
   savings,
 }: AIWorkerCardProps) {
   const cfg = VARIANT_CONFIG[variant];
-  const topSkills = worker.skills?.slice(0, 2) ?? [];
 
   const reasonLines = useMemo(() => {
     const options: { distanceKm?: number; etaMinutes?: number; estimatedPrice?: number; savings?: number } = {};
@@ -88,112 +94,130 @@ export function AIWorkerCard({
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.06 }}
-      className="card-premium card-premium-hover group relative flex flex-col overflow-hidden p-0"
+      transition={{ duration: 0.35, delay: index * 0.07 }}
+      whileHover={{ y: -3, boxShadow: '0 16px 40px rgba(0,0,0,0.12)' }}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300"
     >
-      <div className={`relative h-20 overflow-hidden bg-gradient-to-br ${cfg.ring}`}>
-        <div className="absolute inset-0 bg-gradient-to-t from-card/60 to-transparent" />
-        <div className={`absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1 text-xs font-semibold backdrop-blur ${cfg.accent}`}>
+      {/* ── Gradient top banner ── */}
+      <div className={cn('relative h-16 bg-gradient-to-br', cfg.headerBg)}>
+        {/* Variant badge */}
+        <span className={cn('absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm', cfg.badgeBg)}>
           {cfg.icon} {cfg.label}
+        </span>
+        {/* Online dot */}
+        {worker.isOnline && (
+          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 shadow-sm backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Online
+          </span>
+        )}
+      </div>
+
+      {/* ── Avatar ── */}
+      <div className="-mt-8 flex justify-center">
+        <div className="relative">
+          <Avatar className="h-16 w-16 border-4 border-white shadow-md">
+            <AvatarImage src={worker.avatar} alt={worker.name} />
+            <AvatarFallback
+              className="text-sm font-bold text-white"
+              style={{ background: `linear-gradient(135deg, ${cfg.accentColor}, ${cfg.accentColor}99)` }}
+            >
+              {initials(worker.name)}
+            </AvatarFallback>
+          </Avatar>
+          {worker.isVerified && (
+            <div className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600">
+              <BadgeCheck className="h-3 w-3 text-white" />
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="-mt-9 flex flex-1 flex-col px-5 pb-5">
-        <Avatar className="h-16 w-16 border-4 border-card shadow-md">
-          <AvatarImage src={worker.avatar} alt={worker.name} />
-          <AvatarFallback className="bg-primary/10 font-semibold text-primary">{initials(worker.name)}</AvatarFallback>
-        </Avatar>
+      {/* ── Name + profession ── */}
+      <div className="mt-2 px-4 text-center">
+        <h3 className="truncate font-bold text-gray-900 font-display text-sm">{worker.name}</h3>
+        <p className="text-xs text-gray-500 truncate">{worker.profession}</p>
+      </div>
 
-        <div className="mt-3 flex items-center gap-1.5">
-          <h3 className="truncate font-semibold font-display">{worker.name}</h3>
-          {worker.isVerified && <BadgeCheck className="h-4 w-4 shrink-0 text-primary" />}
+      {/* ── Rating row ── */}
+      <div className="mt-2 flex items-center justify-center gap-1">
+        <StarRating rating={worker.rating} size={11} showValue reviewCount={worker.reviewCount} />
+      </div>
+
+      {/* ── Stats row ── */}
+      <div className="mx-4 mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-gray-100">
+        <div className="flex flex-col items-center bg-gray-50 py-2 px-1">
+          <p className="text-xs font-bold text-gray-800">{worker.completedJobs ?? '—'}</p>
+          <p className="text-[10px] text-gray-400">Jobs</p>
         </div>
-        <p className="text-sm text-muted-foreground">{worker.profession}</p>
+        <div className="flex flex-col items-center bg-gray-50 py-2 px-1">
+          <p className="text-xs font-bold text-gray-800">{worker.experienceYears}y</p>
+          <p className="text-[10px] text-gray-400">Exp</p>
+        </div>
+        <div className="flex flex-col items-center bg-gray-50 py-2 px-1">
+          <p className="text-xs font-bold" style={{ color: cfg.accentColor }}>{formatCurrency(worker.hourlyRate)}</p>
+          <p className="text-[10px] text-gray-400">/hr</p>
+        </div>
+      </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <StarRating rating={worker.rating} size={13} showValue reviewCount={worker.reviewCount} />
-          <span className="flex items-center gap-0.5">
-            <Briefcase className="h-3 w-3" /> {worker.experienceYears}y exp
+      {/* ── Variant-specific extra badge ── */}
+      <div className="mx-4 mt-2 flex flex-wrap justify-center gap-1.5">
+        {variant === 'fastest' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            <Zap className="h-2.5 w-2.5" /> ETA {etaMinutes ?? worker.etaMinutes ?? '—'} min
           </span>
-          {worker.languages?.length > 0 && (
-            <span className="flex items-center gap-0.5">
-              <Globe className="h-3 w-3" /> {worker.languages.slice(0, 2).join(', ')}
-            </span>
-          )}
-        </div>
-
-        {/* Why this worker? */}
-        <RecommendationReason lines={reasonLines} />
-
-        {/* Variant-specific metrics */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {variant === 'nearby' && (
-            <>
-              {(distanceKm ?? worker.distanceKm) != null && <Badge variant="secondary" className="gap-1"><MapPin className="h-3 w-3" /> {(distanceKm ?? worker.distanceKm)!.toFixed(1)} km</Badge>}
-              {(etaMinutes ?? worker.etaMinutes) != null && <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> ETA {(etaMinutes ?? worker.etaMinutes)} min</Badge>}
-              {worker.isOnline && <Badge className="gap-1 bg-success text-white"><span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> Online</Badge>}
-            </>
-          )}
-          {variant === 'fastest' && (
-            <>
-              <Badge variant="secondary" className="gap-1"><Zap className="h-3 w-3" /> ETA {etaMinutes ?? worker.etaMinutes ?? '—'} min</Badge>
-              {(distanceKm ?? worker.distanceKm) != null && <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" /> {distanceKm ?? worker.distanceKm} km</Badge>}
-              <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {worker.completedJobs} jobs</Badge>
-            </>
-          )}
-          {variant === 'highest-rated' && (
-            <>
-              <Badge variant="secondary" className="gap-1"><Star className="h-3 w-3 fill-warning text-warning" /> {worker.rating.toFixed(1)}</Badge>
-              <Badge variant="outline" className="gap-1">{worker.reviewCount} reviews</Badge>
-              <Badge className="gap-1"><BadgeCheck className="h-3 w-3" /> Verified</Badge>
-            </>
-          )}
-          {variant === 'budget' && (
-            <>
-              {estimatedPrice != null && (
-                <Badge variant="secondary" className="gap-1">{formatCurrency(estimatedPrice)} est.</Badge>
-              )}
-              {savings != null && savings > 0 && (
-                <Badge className="gap-1 bg-success text-white"><Wallet className="h-3 w-3" /> Save {formatCurrency(savings)}</Badge>
-              )}
-              {distanceKm != null && <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" /> {distanceKm} km</Badge>}
-            </>
-          )}
-          {variant === 'recommended' && (
-            <>
-              <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {worker.completedJobs} jobs</Badge>
-              {worker.isOnline && <Badge className="gap-1 bg-success text-white"><span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> Online</Badge>}
-            </>
-          )}
-        </div>
-
-        {/* Top skills */}
-        {topSkills.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {topSkills.map((skill) => (
-              <Badge key={skill} variant="secondary" className="text-[10px] px-2 py-0.5">
-                {skill}
-              </Badge>
-            ))}
-          </div>
         )}
+        {variant === 'budget' && estimatedPrice != null && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            <Wallet className="h-2.5 w-2.5" /> {formatCurrency(estimatedPrice)} est.
+          </span>
+        )}
+        {variant === 'budget' && savings != null && savings > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+            Save {formatCurrency(savings)}
+          </span>
+        )}
+        {variant === 'highest-rated' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+            <Star className="h-2.5 w-2.5 fill-rose-500 text-rose-500" /> {worker.reviewCount} reviews
+          </span>
+        )}
+        {variant === 'nearby' && (distanceKm ?? worker.distanceKm) != null && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 border border-cyan-200 px-2 py-0.5 text-[10px] font-semibold text-cyan-700">
+            <MapPin className="h-2.5 w-2.5" /> {(distanceKm ?? worker.distanceKm)!.toFixed(1)} km
+          </span>
+        )}
+      </div>
 
-        <div className="mt-auto flex items-center justify-between pt-4">
-          <div>
-            <span className="text-xs text-muted-foreground">from</span>
-            <p className="font-bold font-display">{formatCurrency(worker.hourlyRate)}/hr</p>
-          </div>
-          <div className="flex gap-2">
-            <Button asChild size="sm" variant="outline" className="rounded-full">
-              <Link to={`/workers/${worker._id}`}>View Profile</Link>
-            </Button>
-            {worker._id && (
-              <Button asChild size="sm" className="btn-glow gap-1 rounded-full">
-                <Link to={`${ROUTES.booking}?worker=${worker._id}`}>Book Now <ArrowRight className="h-3.5 w-3.5" /></Link>
-              </Button>
-            )}
+      {/* ── Why AI picked — collapsed, 2 lines max ── */}
+      {reasonLines.length > 0 && (
+        <div className="mx-4 mt-3 rounded-xl bg-blue-50/70 border border-blue-100 p-2.5">
+          <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-blue-500 flex items-center gap-1">
+            <Sparkles className="h-2.5 w-2.5" /> Why AI picked
+          </p>
+          <div className="text-[11px] text-gray-600 line-clamp-3 leading-snug">
+            <RecommendationReason lines={reasonLines} />
           </div>
         </div>
+      )}
+
+      {/* ── Footer buttons ── */}
+      <div className="mt-auto p-4 pt-3 flex gap-2">
+        <Link
+          to={`/workers/${worker._id}`}
+          className="flex-1 rounded-xl border border-gray-200 py-2 text-center text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all"
+        >
+          Profile
+        </Link>
+        {worker._id && (
+          <Link
+            to={`${ROUTES.booking}?worker=${worker._id}`}
+            className="flex-1 flex items-center justify-center gap-1 rounded-xl py-2 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            style={{ background: `linear-gradient(135deg, ${cfg.accentColor}, ${cfg.accentColor}cc)` }}
+          >
+            Select <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
       </div>
     </motion.div>
   );
