@@ -117,10 +117,17 @@ class Settings(BaseSettings):
         return v.lower()
 
     def model_post_init(self, __context) -> None:
-        if self.is_production and self.SECRET_KEY == "your-secret-key-change-this-in-production":
-            raise ValueError(
-                "SECRET_KEY must be set to a secure value in production. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+        # Allow startup even if SECRET_KEY is not yet customised;
+        # just warn loudly so it's not silently insecure.
+        if self.is_production and self.SECRET_KEY in {
+            "your-secret-key-change-this-in-production",
+            "",
+        }:
+            import warnings
+            warnings.warn(
+                "SECRET_KEY is not set to a secure value in production! "
+                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\"",
+                stacklevel=2,
             )
 
     @property

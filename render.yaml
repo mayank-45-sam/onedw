@@ -4,7 +4,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: APP_NAME
         value: OneDW API
@@ -19,7 +19,7 @@ services:
       - key: API_V1_PREFIX
         value: /api/v1
       - key: MONGODB_URL
-        value: mongodb+srv://mkkarunagaran3_db_user:inf7YuvpTmvA9RuR@onedwcluster.pdn7gvb.mongodb.net/?appName=onedwCluster
+        sync: false
       - key: MONGODB_DB_NAME
         value: onedw
       - key: SECRET_KEY
@@ -30,6 +30,16 @@ services:
         value: "30"
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: "7"
+      - key: CORS_ORIGINS
+        value: '["*"]'
+      - key: CORS_ALLOW_CREDENTIALS
+        value: "True"
+      - key: CORS_ALLOW_METHODS
+        value: '["*"]'
+      - key: CORS_ALLOW_HEADERS
+        value: '["*"]'
+      - key: SOCKETIO_CORS_ORIGINS
+        value: '["*"]'
       - key: AI_API_KEY
         sync: false
       - key: AI_MODEL
@@ -39,10 +49,6 @@ services:
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GROQ_API_KEY
-        sync: false
-      - key: CORS_ORIGINS
-        sync: false
-      - key: SOCKETIO_CORS_ORIGINS
         sync: false
       - key: UPLOAD_DIR
         value: uploads

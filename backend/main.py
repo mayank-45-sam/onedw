@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import asyncio
+import os
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,14 +32,19 @@ async def lifespan(app: FastAPI):
     """
     ensure_directory(settings.LOG_DIR)
     logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
+    logger.info(f"MONGODB_URL configured: {'Atlas' if 'mongodb+srv' in settings.MONGODB_URL else 'localhost'}")
 
-    # Initialise Beanie (MongoDB) connection
-    await init_db()
-
-    if await check_database_connection():
-        logger.info("MongoDB connection established")
-    else:
-        logger.warning("MongoDB connection unavailable at startup")
+    # Initialise Beanie (MongoDB) connection — wrapped so the app still
+    # binds to its port even if the DB is temporarily unreachable.
+    try:
+        await init_db()
+        if await check_database_connection():
+            logger.info("MongoDB connection established")
+        else:
+            logger.warning("MongoDB connection unavailable at startup")
+    except Exception as e:
+        logger.error(f"Database initialisation failed: {e}")
+        logger.warning("App starting WITHOUT database — check MONGODB_URL env var")
 
     # Auto-create collections + seed data on every startup
     try:
