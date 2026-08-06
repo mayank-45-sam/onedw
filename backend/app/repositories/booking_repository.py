@@ -1,6 +1,7 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func
+"""Async Booking repository."""
+from __future__ import annotations
+
+from typing import List, Optional, Tuple
 
 from app.models.booking import Booking, BookingStatus
 from app.models.booking_status_history import BookingStatusHistory
@@ -8,51 +9,23 @@ from app.repositories.base import BaseRepository
 
 
 class BookingRepository(BaseRepository[Booking]):
-    """Repository for Booking model operations."""
+    def __init__(self):
+        super().__init__(Booking)
 
-    def __init__(self, db: Session):
-        super().__init__(Booking, db)
-
-    def get_by_customer(self, customer_id: str, skip: int = 0, limit: int = 20) -> tuple[List[Booking], int]:
-        query = self.db.query(Booking).filter(Booking.customer_id == customer_id)
-        total = query.count()
-        items = (
-            query
-            .options(selectinload(Booking.service), selectinload(Booking.worker))
-            .order_by(Booking.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    async def get_by_customer(self, customer_id: str, skip: int = 0, limit: int = 20) -> Tuple[List[Booking], int]:
+        total = await Booking.find(Booking.customer_id == customer_id).count()
+        items = await Booking.find(Booking.customer_id == customer_id).sort("-created_at").skip(skip).limit(limit).to_list()
         return items, total
 
-    def get_by_worker(self, worker_id: str, skip: int = 0, limit: int = 20) -> tuple[List[Booking], int]:
-        query = self.db.query(Booking).filter(Booking.worker_id == worker_id)
-        total = query.count()
-        items = (
-            query
-            .options(selectinload(Booking.service), selectinload(Booking.customer))
-            .order_by(Booking.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    async def get_by_worker(self, worker_id: str, skip: int = 0, limit: int = 20) -> Tuple[List[Booking], int]:
+        total = await Booking.find(Booking.worker_id == worker_id).count()
+        items = await Booking.find(Booking.worker_id == worker_id).sort("-created_at").skip(skip).limit(limit).to_list()
         return items, total
 
-    def get_with_details(self, booking_id: str) -> Optional[Booking]:
-        return (
-            self.db.query(Booking)
-            .options(
-                selectinload(Booking.service),
-                selectinload(Booking.worker),
-                selectinload(Booking.customer),
-                selectinload(Booking.status_history),
-            )
-            .filter(Booking.id == booking_id)
-            .first()
-        )
+    async def get_with_details(self, booking_id: str) -> Optional[Booking]:
+        return await Booking.find_one(Booking.id == booking_id)
 
-    def add_status_history(
+    async def add_status_history(
         self,
         booking_id: str,
         status: str,
@@ -65,14 +38,13 @@ class BookingRepository(BaseRepository[Booking]):
             note=note,
             changed_by=changed_by,
         )
-        self.db.add(history)
+        await history.insert()
         return history
 
-    def count_by_worker(self, worker_id: str, status: Optional[str] = None) -> int:
-        query = self.db.query(func.count(Booking.id)).filter(Booking.worker_id == worker_id)
+    async def count_by_worker(self, worker_id: str, status: Optional[str] = None) -> int:
         if status:
-            query = query.filter(Booking.status == status)
-        return query.scalar() or 0
+            return await Booking.find(Booking.worker_id == worker_id, Booking.status == status).count()
+        return await Booking.find(Booking.worker_id == worker_id).count()
 
-    def count_completed_by_worker(self, worker_id: str) -> int:
-        return self.count_by_worker(worker_id, BookingStatus.COMPLETED.value)
+    async def count_completed_by_worker(self, worker_id: str) -> int:
+        return await self.count_by_worker(worker_id, BookingStatus.COMPLETED.value)

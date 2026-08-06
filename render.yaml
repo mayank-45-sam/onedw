@@ -3,9 +3,11 @@ services:
     name: onedw-backend
     runtime: python
     rootDir: backend
-    buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
+      - key: APP_NAME
+        value: OneDW API
       - key: APP_ENV
         value: production
       - key: DEBUG
@@ -16,17 +18,31 @@ services:
         value: json
       - key: API_V1_PREFIX
         value: /api/v1
-      - key: DATABASE_URL
-        sync: false
+      - key: MONGODB_URL
+        value: mongodb+srv://mkkarunagaran3_db_user:inf7YuvpTmvA9RuR@onedwcluster.pdn7gvb.mongodb.net/?appName=onedwCluster
+      - key: MONGODB_DB_NAME
+        value: onedw
       - key: SECRET_KEY
         sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
       - key: AI_API_KEY
         sync: false
+      - key: AI_MODEL
+        value: openai/gpt-4o-mini
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
       - key: GROQ_API_KEY
         sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: SOCKETIO_CORS_ORIGINS
         sync: false
+      - key: UPLOAD_DIR
+        value: uploads

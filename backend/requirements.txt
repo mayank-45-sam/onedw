@@ -2,16 +2,20 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 gunicorn==23.0.0
+starlette==0.38.6
 
-# Database
-sqlalchemy==2.0.35
-psycopg[binary]==3.2.13
-alembic==1.13.3
+# Database - MongoDB
+motor==3.6.0
+beanie==1.29.0
+pymongo==4.9.2
+dnspython==2.8.0
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 bcrypt==4.0.1
+passlib==1.7.4
 python-multipart==0.0.12
+cryptography==50.0.0
 
 # Validation
 pydantic>=2.9.2,<3.0.0
@@ -40,3 +44,4 @@ Pillow==12.3.0
 
 # Real-time (WebSockets / Socket.IO)
 python-socketio==5.16.3
+websockets>=10.4

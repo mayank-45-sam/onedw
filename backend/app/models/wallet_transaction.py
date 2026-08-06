@@ -1,8 +1,13 @@
-import uuid
+"""WalletTransaction Beanie document."""
+from __future__ import annotations
+
 import enum
-from sqlalchemy import Column, String, Float, ForeignKey, Enum as SAEnum
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+import uuid
+from typing import Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
 class TransactionType(str, enum.Enum):
@@ -16,18 +21,17 @@ class TransactionStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-class WalletTransaction(BaseModel):
-    __tablename__ = "wallet_transactions"
+class WalletTransaction(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    wallet_id: str
+    user_id: str
+    type: TransactionType
+    amount: float
+    currency: str = "INR"
+    status: TransactionStatus = TransactionStatus.PENDING
+    description: str
+    booking_id: Optional[str] = None
+    reference: Optional[str] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    wallet_id = Column(String(36), ForeignKey("wallets.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    type = Column(SAEnum(TransactionType, name="transaction_type", create_constraint=True), nullable=False)
-    amount = Column(Float, nullable=False)
-    currency = Column(String(3), default="INR", nullable=False)
-    status = Column(SAEnum(TransactionStatus, name="transaction_status", create_constraint=True), nullable=False, default=TransactionStatus.PENDING)
-    description = Column(String(500), nullable=False)
-    booking_id = Column(String(36), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
-    reference = Column(String(255), nullable=True)
-
-    wallet = relationship("Wallet", back_populates="transactions")
+    class Settings:
+        name = "wallet_transactions"

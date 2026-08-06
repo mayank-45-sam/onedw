@@ -1,8 +1,4 @@
-from typing import Annotated
-
-from fastapi import Depends
-from sqlalchemy.orm import Session
-
-from app.db.database import get_db
-
-DbSession = Annotated[Session, Depends(get_db)]
+"""Database dependency stub — kept for backward compat but no-op with Beanie."""
+# With Beanie/Motor, there is no per-request DB session.
+# Beanie documents use the globally initialised async connection.
+# This file intentionally left minimal.

@@ -1,5 +1,5 @@
-"""Database engine and session management."""
+"""Database connection management (Motor + Beanie)."""
 
-from app.db.database import Base, SessionLocal, engine, get_db, init_db
+from app.db.database import init_db, check_database_connection, close_db, get_mongo_db, get_mongo_client
 
-__all__ = ["Base", "SessionLocal", "engine", "get_db", "init_db"]
+__all__ = ["init_db", "check_database_connection", "close_db", "get_mongo_db", "get_mongo_client"]

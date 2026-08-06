@@ -1,14 +1,17 @@
+"""WorkerSkill Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class WorkerSkill(BaseModel):
-    __tablename__ = "worker_skills"
+class WorkerSkill(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    skill: str
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    skill = Column(String(255), nullable=False)
-
-    worker = relationship("Worker", back_populates="skills")
+    class Settings:
+        name = "worker_skills"

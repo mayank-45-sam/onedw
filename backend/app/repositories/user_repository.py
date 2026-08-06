@@ -1,42 +1,39 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session
-from sqlalchemy import exists
+"""Async User repository."""
+from __future__ import annotations
+
+from typing import List, Optional
 
 from app.models.user import User
 from app.repositories.base import BaseRepository
 
 
 class UserRepository(BaseRepository[User]):
-    """Repository for User model operations."""
+    def __init__(self):
+        super().__init__(User)
 
-    def __init__(self, db: Session):
-        super().__init__(User, db)
+    async def get_by_email(self, email: str) -> Optional[User]:
+        return await User.find_one(User.email == email)
 
-    def get_by_email(self, email: str) -> Optional[User]:
-        return self.db.query(User).filter(User.email == email).first()
+    async def get_by_phone(self, phone: str) -> Optional[User]:
+        return await User.find_one(User.phone == phone)
 
-    def get_by_phone(self, phone: str) -> Optional[User]:
-        return self.db.query(User).filter(User.phone == phone).first()
+    async def email_exists(self, email: str) -> bool:
+        return await User.find_one(User.email == email) is not None
 
-    def email_exists(self, email: str) -> bool:
-        return self.db.query(exists().where(User.email == email)).scalar()
-
-    def phone_exists(self, phone: str) -> bool:
+    async def phone_exists(self, phone: str) -> bool:
         if phone is None:
             return False
-        return self.db.query(exists().where(User.phone == phone)).scalar()
+        return await User.find_one(User.phone == phone) is not None
 
-    def get_active_users(self, skip: int = 0, limit: int = 100) -> List[User]:
-        return self.db.query(User).filter(User.is_active == True).offset(skip).limit(limit).all()
+    async def get_active_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+        return await User.find(User.is_active == True).skip(skip).limit(limit).to_list()
 
-    def deactivate(self, user: User) -> User:
+    async def deactivate(self, user: User) -> User:
         user.is_active = False
-        self.db.commit()
-        self.db.refresh(user)
+        await user.save()
         return user
 
-    def verify_user(self, user: User) -> User:
+    async def verify_user(self, user: User) -> User:
         user.is_verified = True
-        self.db.commit()
-        self.db.refresh(user)
+        await user.save()
         return user

@@ -1,21 +1,13 @@
-"""Service for admin notification broadcasts.
-
-Broadcasts are fan-out campaigns: an admin composes a message, picks an
-audience + category + priority, and the service creates one ``Notification``
-row per recipient (with a realtime Socket.IO push when available). Sent
-campaigns are tracked on the ``Broadcast`` row for the history + analytics UI.
-"""
+"""Async Broadcast service — Beanie version."""
+from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import or_, func
-from sqlalchemy.orm import Session
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.core.socketio import emit_to_user
-from app.db.database import SessionLocal
 from app.models.broadcast import Broadcast
 from app.models.notification import Notification
 from app.models.user import User, UserRole
@@ -42,92 +34,54 @@ def _parse_iso(value) -> Optional[datetime]:
         return None
 
 
-def resolve_audience_user_ids(db: Session, audience: str) -> list:
+async def resolve_audience_user_ids(audience: str) -> list:
     """Resolve an audience label to the list of recipient user ids."""
     if audience == "all":
-        rows = db.query(User.id).filter(
-            User.is_active == True,
-            User.role != UserRole.ADMIN,
-        ).all()
-        return [r[0] for r in rows]
+        users = await User.find(User.is_active == True, User.role != UserRole.ADMIN).to_list()
+        return [u.id for u in users]
 
     if audience == "customers":
-        rows = db.query(User.id).filter(
-            User.role == UserRole.CUSTOMER,
-            User.is_active == True,
-        ).all()
-        return [r[0] for r in rows]
+        users = await User.find(User.role == UserRole.CUSTOMER, User.is_active == True).to_list()
+        return [u.id for u in users]
 
     if audience == "workers":
-        rows = db.query(User.id).filter(
-            User.role == UserRole.WORKER,
-            User.is_active == True,
-        ).all()
-        return [r[0] for r in rows]
+        users = await User.find(User.role == UserRole.WORKER, User.is_active == True).to_list()
+        return [u.id for u in users]
 
     if audience == "verified_workers":
-        rows = (
-            db.query(Worker.user_id)
-            .join(User, User.id == Worker.user_id)
-            .filter(
-                Worker.verification_status == "completed",
-                User.is_active == True,
-            )
-            .all()
-        )
-        return [r[0] for r in rows]
+        workers = await Worker.find(Worker.verification_status == "completed").to_list()
+        user_ids = [w.user_id for w in workers]
+        users = await User.find(User.id.in_(user_ids), User.is_active == True).to_list()
+        return [u.id for u in users]
 
     if audience == "pending_workers":
-        rows = (
-            db.query(Worker.user_id)
-            .join(User, User.id == Worker.user_id)
-            .filter(
-                or_(
-                    Worker.verification_status.is_(None),
-                    Worker.verification_status != "completed",
-                ),
-                User.is_active == True,
-            )
-            .all()
-        )
-        return [r[0] for r in rows]
+        workers = await Worker.find().to_list()
+        pending_worker_user_ids = [w.user_id for w in workers if w.verification_status != "completed"]
+        users = await User.find(User.id.in_(pending_worker_user_ids), User.is_active == True).to_list()
+        return [u.id for u in users]
 
     return []
 
 
 def _notification_payload(n: Notification) -> dict:
-    return {
-        "id": n.id,
-        "title": n.title,
-        "body": n.body,
-        "type": n.type,
-        "read": n.read,
-        "data": n.data,
-    }
+    return {"id": n.id, "title": n.title, "body": n.body, "type": n.type, "read": n.read, "data": n.data}
 
 
 class BroadcastService:
     @staticmethod
     def serialize(b: Broadcast) -> dict:
         return {
-            "id": b.id,
-            "title": b.title,
-            "message": b.message,
-            "audience": b.audience,
-            "category": b.category,
-            "priority": b.priority,
-            "status": b.status,
+            "id": b.id, "title": b.title, "message": b.message, "audience": b.audience,
+            "category": b.category, "priority": b.priority, "status": b.status,
             "scheduled_at": b.scheduled_at.isoformat() if b.scheduled_at else None,
             "sent_at": b.sent_at.isoformat() if b.sent_at else None,
-            "sent_by": b.sent_by,
-            "total_recipients": b.total_recipients,
-            "delivered_count": b.delivered_count,
-            "failed_count": b.failed_count,
+            "sent_by": b.sent_by, "total_recipients": b.total_recipients,
+            "delivered_count": b.delivered_count, "failed_count": b.failed_count,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         }
 
     @staticmethod
-    def create_broadcast(db: Session, admin_user: User, payload: dict) -> Broadcast:
+    async def create_broadcast(admin_user: User, payload: dict) -> Broadcast:
         title = str(payload.get("title", "")).strip()
         message = str(payload.get("message", "")).strip()
         audience = str(payload.get("audience", "")).strip()
@@ -159,29 +113,21 @@ class BroadcastService:
                 raise BadRequestException(message="Schedule time must be in the future")
 
         broadcast = Broadcast(
-            title=title,
-            message=message,
-            audience=audience,
-            category=category,
-            priority=priority,
+            title=title, message=message, audience=audience, category=category, priority=priority,
             status="sent" if schedule_now else "scheduled",
-            scheduled_at=scheduled_at,
-            sent_by=admin_user.id,
+            scheduled_at=scheduled_at, sent_by=admin_user.id,
         )
-        db.add(broadcast)
-        db.flush()
+        await broadcast.insert()
 
         if schedule_now:
-            BroadcastService.deliver(db, broadcast, commit=False)
+            await BroadcastService.deliver(broadcast)
 
-        db.commit()
-        db.refresh(broadcast)
         return broadcast
 
     @staticmethod
-    def deliver(db: Session, broadcast: Broadcast, commit: bool = True) -> dict:
+    async def deliver(broadcast: Broadcast) -> dict:
         """Fan out a broadcast to its audience, creating Notification rows."""
-        user_ids = resolve_audience_user_ids(db, broadcast.audience)
+        user_ids = await resolve_audience_user_ids(broadcast.audience)
         broadcast.total_recipients = len(user_ids)
         delivered = 0
         failed = 0
@@ -189,22 +135,14 @@ class BroadcastService:
         for uid in user_ids:
             try:
                 n = Notification(
-                    user_id=uid,
-                    title=broadcast.title,
-                    body=broadcast.message,
-                    type="broadcast",
-                    read=False,
-                    data={
-                        "broadcast_id": broadcast.id,
-                        "category": broadcast.category,
-                        "priority": broadcast.priority,
-                    },
+                    user_id=uid, title=broadcast.title, body=broadcast.message,
+                    type="broadcast", read=False,
+                    data={"broadcast_id": broadcast.id, "category": broadcast.category, "priority": broadcast.priority},
                 )
-                db.add(n)
-                db.flush()
+                await n.insert()
                 emit_to_user(uid, "notification:new", {"notification": _notification_payload(n)})
                 delivered += 1
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 failed += 1
                 logger.warning(f"Broadcast delivery failed for user {uid}: {e}")
 
@@ -212,130 +150,100 @@ class BroadcastService:
         broadcast.failed_count = failed
         broadcast.status = "sent"
         broadcast.sent_at = _utcnow()
-
-        if commit:
-            db.commit()
+        await broadcast.save()
         return {"delivered": delivered, "failed": failed, "total": len(user_ids)}
 
     @staticmethod
-    def list_broadcasts(
-        db: Session,
+    async def list_broadcasts(
         page: int = 1,
         limit: int = 20,
         search: Optional[str] = None,
         category: Optional[str] = None,
         audience: Optional[str] = None,
     ) -> dict:
-        query = db.query(Broadcast)
+        all_b = await Broadcast.find_all().to_list()
         if search:
-            like = f"%{search}%"
-            query = query.filter(or_(Broadcast.title.ilike(like), Broadcast.message.ilike(like)))
+            term = search.lower()
+            all_b = [b for b in all_b if term in (b.title or "").lower() or term in (b.message or "").lower()]
         if category:
-            query = query.filter(Broadcast.category == category)
+            all_b = [b for b in all_b if b.category == category]
         if audience:
-            query = query.filter(Broadcast.audience == audience)
+            all_b = [b for b in all_b if b.audience == audience]
 
-        total = query.count()
-        items = (
-            query.order_by(Broadcast.created_at.desc())
-            .offset((page - 1) * limit)
-            .limit(limit)
-            .all()
-        )
+        all_b.sort(key=lambda b: b.created_at or datetime.min, reverse=True)
+        total = len(all_b)
+        items = all_b[(page - 1) * limit: page * limit]
         return {
-            "success": True,
-            "message": "Broadcasts retrieved",
+            "success": True, "message": "Broadcasts retrieved",
             "data": [BroadcastService.serialize(b) for b in items],
-            "total": total,
-            "page": page,
-            "limit": limit,
+            "total": total, "page": page, "limit": limit,
             "pages": (total + limit - 1) // limit if total > 0 else 0,
         }
 
     @staticmethod
-    def stats(db: Session) -> dict:
+    async def stats() -> dict:
         now = _utcnow()
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         start_of_week = start_of_day - timedelta(days=start_of_day.weekday())
 
-        sent_today = db.query(Broadcast).filter(
-            Broadcast.status == "sent",
-            Broadcast.sent_at >= start_of_day,
-        ).count()
-        sent_this_week = db.query(Broadcast).filter(
-            Broadcast.status == "sent",
-            Broadcast.sent_at >= start_of_week,
-        ).count()
-        total_broadcasts = db.query(Broadcast).count()
-        total_delivered = db.query(func.coalesce(func.sum(Broadcast.delivered_count), 0)).scalar()
-        total_attempted = db.query(func.coalesce(func.sum(Broadcast.total_recipients), 0)).scalar()
+        all_b = await Broadcast.find_all().to_list()
+        sent_today = sum(1 for b in all_b if b.status == "sent" and b.sent_at and b.sent_at >= start_of_day)
+        sent_this_week = sum(1 for b in all_b if b.status == "sent" and b.sent_at and b.sent_at >= start_of_week)
+        total_broadcasts = len(all_b)
+        total_delivered = sum(b.delivered_count or 0 for b in all_b)
+        total_attempted = sum(b.total_recipients or 0 for b in all_b)
         success_rate = round(total_delivered * 100 / total_attempted, 1) if total_attempted else 0.0
 
         return {
-            "success": True,
-            "message": "OK",
+            "success": True, "message": "OK",
             "data": {
-                "sent_today": sent_today,
-                "sent_this_week": sent_this_week,
-                "total_broadcasts": total_broadcasts,
-                "success_rate": success_rate,
-                "total_delivered": total_delivered or 0,
+                "sent_today": sent_today, "sent_this_week": sent_this_week,
+                "total_broadcasts": total_broadcasts, "success_rate": success_rate,
+                "total_delivered": total_delivered,
             },
         }
 
     @staticmethod
-    def resend_broadcast(db: Session, broadcast_id: str) -> Broadcast:
-        b = db.query(Broadcast).filter(Broadcast.id == broadcast_id).first()
+    async def resend_broadcast(broadcast_id: str) -> Broadcast:
+        b = await Broadcast.find_one(Broadcast.id == broadcast_id)
         if b is None:
             raise NotFoundException(message="Broadcast not found")
-        BroadcastService.deliver(db, b)
-        db.refresh(b)
+        await BroadcastService.deliver(b)
         return b
 
     @staticmethod
-    def delete_broadcast(db: Session, broadcast_id: str) -> None:
-        b = db.query(Broadcast).filter(Broadcast.id == broadcast_id).first()
+    async def delete_broadcast(broadcast_id: str) -> None:
+        b = await Broadcast.find_one(Broadcast.id == broadcast_id)
         if b is None:
             raise NotFoundException(message="Broadcast not found")
-        # Remove the notifications that this broadcast delivered to users.
-        delivered = db.query(Notification).filter(
-            func.json_extract(Notification.data, "$.broadcast_id") == broadcast_id
-        ).all()
-        for n in delivered:
-            db.delete(n)
-        db.delete(b)
-        db.commit()
+        # Remove associated notifications
+        all_n = await Notification.find_all().to_list()
+        for n in all_n:
+            if isinstance(n.data, dict) and n.data.get("broadcast_id") == broadcast_id:
+                await n.delete()
+        await b.delete()
 
 
-def dispatch_due_broadcasts() -> None:
-    """Send any scheduled broadcasts whose time has arrived. Runs in the scheduler."""
-    db = SessionLocal()
-    try:
-        now = _utcnow()
-        due = db.query(Broadcast).filter(
-            Broadcast.status == "scheduled",
-            Broadcast.scheduled_at <= now,
-        ).all()
-        for b in due:
-            try:
-                result = BroadcastService.deliver(db, b, commit=True)
-                logger.info(
-                    f"Scheduled broadcast {b.id} dispatched "
-                    f"({result['delivered']} delivered, {result['failed']} failed)"
-                )
-            except Exception as e:  # noqa: BLE001
-                logger.error(f"Failed to dispatch scheduled broadcast {b.id}: {e}")
-    finally:
-        db.close()
+async def dispatch_due_broadcasts() -> None:
+    """Send any scheduled broadcasts whose time has arrived."""
+    now = _utcnow()
+    all_b = await Broadcast.find(Broadcast.status == "scheduled").to_list()
+    due = [b for b in all_b if b.scheduled_at and b.scheduled_at <= now]
+    for b in due:
+        try:
+            result = await BroadcastService.deliver(b)
+            logger.info(f"Scheduled broadcast {b.id} dispatched ({result['delivered']} delivered)")
+        except Exception as e:
+            logger.error(f"Failed to dispatch scheduled broadcast {b.id}: {e}")
 
 
 async def broadcast_scheduler_loop(interval_seconds: int = 30) -> None:
     """Background loop started in the app lifespan for scheduled broadcasts."""
     while True:
         try:
-            await asyncio.to_thread(dispatch_due_broadcasts)
+            await dispatch_due_broadcasts()
         except asyncio.CancelledError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error(f"Broadcast scheduler error: {e}")
         await asyncio.sleep(interval_seconds)

@@ -1,10 +1,8 @@
 from typing import Optional
 from pydantic import Field
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from app.db.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.models.coupon import Coupon
@@ -40,16 +38,15 @@ def _serialize(c: Coupon) -> dict:
 
 
 @router.get("", summary="List available coupons")
-def list_coupons(
+async def list_coupons(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
-    query = db.query(Coupon).filter(Coupon.is_active == True)
-    total = query.count()
-    items = query.order_by(Coupon.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    query = Coupon.find(Coupon.is_active == True)
+    total = await query.count()
+    items = await query.sort(-Coupon.created_at).skip((page - 1) * limit).limit(limit).to_list()
     return {
         "success": True,
         "message": "Coupons retrieved",
@@ -62,12 +59,11 @@ def list_coupons(
 
 
 @router.post("/validate", summary="Validate a coupon code")
-def validate_coupon(
+async def validate_coupon(
     body: ValidateCouponRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    coupon = db.query(Coupon).filter(Coupon.code == body.code.upper()).first()
+    coupon = await Coupon.find_one(Coupon.code == body.code.upper())
     if coupon is None:
         raise NotFoundException(message="Coupon not found")
     if not coupon.is_active:

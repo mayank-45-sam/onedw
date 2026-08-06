@@ -12,12 +12,18 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { TranslationLayer } from '@/components/common/TranslationLayer';
 import AIChatWidget from '@/components/ai/AIChatWidget';
 import { ROUTES } from '@/constants/routes';
+import { useKeepAlive } from '@/hooks/useKeepAlive';
 import '@/index.css';
 
 function ChatbotGate() {
   const location = useLocation();
   const hidden = location.pathname.startsWith(ROUTES.workerVerification);
   return hidden ? null : <AIChatWidget />;
+}
+
+function KeepAliveGate() {
+  useKeepAlive();
+  return null;
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -29,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
             <LanguageProvider>
               <TranslationLayer />
               <AuthProvider>
+                <KeepAliveGate />
                 <AppRouter />
                 <ChatbotGate />
                 <Toaster

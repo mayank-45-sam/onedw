@@ -23,12 +23,11 @@ class Settings(BaseSettings):
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
 
-    # Database
-    DATABASE_URL: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/onedw"
+    # Database - MongoDB
+    MONGODB_URL: str = Field(
+        default="mongodb://localhost:27017"
     )
-    DATABASE_POOL_SIZE: int = Field(default=20)
-    DATABASE_MAX_OVERFLOW: int = Field(default=10)
+    MONGODB_DB_NAME: str = Field(default="onedw")
 
     # Security
     SECRET_KEY: str = Field(default="your-secret-key-change-this-in-production")

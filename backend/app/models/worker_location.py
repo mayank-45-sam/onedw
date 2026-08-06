@@ -1,15 +1,18 @@
+"""WorkerLocation Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, Float, String, ForeignKey
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class WorkerLocation(BaseModel):
-    __tablename__ = "worker_locations"
+class WorkerLocation(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    latitude: float
+    longitude: float
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-
-    worker = relationship("Worker", back_populates="location")
+    class Settings:
+        name = "worker_locations"

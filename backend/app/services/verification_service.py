@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy.orm import Session
 
 from google import genai
 from google.genai import types
@@ -33,6 +32,7 @@ from app.models.verification import (
     VerificationCertificate,
 )
 from app.models.worker import Worker
+from app.models.user import User
 from app.models.certificate import Certificate
 
 # ---------------------------------------------------------------------------
@@ -1386,7 +1386,10 @@ def _evaluate_media_parts(client: genai.Client, media_urls: list, profession: st
                 uploaded = client.files.upload(path=str(local))
                 parts.append(types.Part.from_uri(file_uri=uploaded.uri, mime_type=uploaded.mime_type))
             else:
-                parts.append(types.Part.from_bytes(data=local.read_bytes(), mime_type="image/jpeg"))
+                ext = local.suffix.lower().lstrip(".")
+                mime_map = {"png": "image/png", "webp": "image/webp", "gif": "image/gif", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
+                mime = mime_map.get(ext, "image/jpeg")
+                parts.append(types.Part.from_bytes(data=local.read_bytes(), mime_type=mime))
         except Exception as e:
             logger.warning(f"Skipping media {url}: {e}")
     if not parts:
@@ -1410,7 +1413,7 @@ def _heuristic_practical_score(media_urls: list) -> float:
     return round(min(90.0, score), 2)
 
 
-def evaluate_practical(db: Session, verification: WorkerVerification, media_urls: list) -> dict:
+async def evaluate_practical(verification: WorkerVerification, media_urls: list) -> dict:
     """Evaluate a worker's practical media submission and store the result."""
     if not media_urls:
         raise BadRequestException(message="Please upload at least one work photo or video")
@@ -1443,27 +1446,22 @@ def evaluate_practical(db: Session, verification: WorkerVerification, media_urls
                 "overall_score": score,
             }
 
-    assessment = (
-        db.query(PracticalAssessment)
-        .filter(PracticalAssessment.verification_id == verification.id)
-        .first()
-    )
+    assessment = await PracticalAssessment.find_one(PracticalAssessment.verification_id == verification.id)
     if assessment is None:
         assessment = PracticalAssessment(
             verification_id=verification.id,
             worker_id=verification.worker_id,
         )
-        db.add(assessment)
     assessment.media_urls = media_urls
     assessment.evaluation = evaluation
     assessment.score = score
     assessment.status = "submitted"
     assessment.submitted_at = _utcnow()
+    await assessment.save()
 
     verification.practical_score = score
     verification.step = "interview"
-    db.commit()
-    db.refresh(assessment)
+    await verification.save()
 
     return {
         "score": score,
@@ -1639,12 +1637,8 @@ def _gemini_interview_json(prompt: str, temperature: float = 0.6) -> Optional[di
         return None
 
 
-def start_interview(db: Session, verification: WorkerVerification) -> dict:
-    interview = (
-        db.query(VoiceInterview)
-        .filter(VoiceInterview.verification_id == verification.id)
-        .first()
-    )
+async def start_interview(verification: WorkerVerification) -> dict:
+    interview = await VoiceInterview.find_one(VoiceInterview.verification_id == verification.id)
     if interview is None:
         interview = VoiceInterview(
             verification_id=verification.id,
@@ -1654,9 +1648,7 @@ def start_interview(db: Session, verification: WorkerVerification) -> dict:
             status="in_progress",
             started_at=_utcnow(),
         )
-        db.add(interview)
-        db.commit()
-        db.refresh(interview)
+        await interview.insert()
 
     if not interview.exchanges:
         question = None
@@ -1671,7 +1663,7 @@ def start_interview(db: Session, verification: WorkerVerification) -> dict:
         else:
             question = _fallback_interview_questions(verification.profession)[0]
         interview.exchanges = [{"ai_question": question, "worker_answer": None, "mode": None}]
-        db.commit()
+        await interview.save()
 
     return {
         "interview_id": interview.id,
@@ -1681,19 +1673,11 @@ def start_interview(db: Session, verification: WorkerVerification) -> dict:
     }
 
 
-def respond_interview(db: Session, verification: WorkerVerification, answer: str, mode: str) -> dict:
-    interview = (
-        db.query(VoiceInterview)
-        .filter(VoiceInterview.verification_id == verification.id)
-        .first()
-    )
+async def respond_interview(verification: WorkerVerification, answer: str, mode: str) -> dict:
+    interview = await VoiceInterview.find_one(VoiceInterview.verification_id == verification.id)
     if interview is None:
-        interview = start_interview(db, verification)
-        interview = (
-            db.query(VoiceInterview)
-            .filter(VoiceInterview.verification_id == verification.id)
-            .first()
-        )
+        await start_interview(verification)
+        interview = await VoiceInterview.find_one(VoiceInterview.verification_id == verification.id)
 
     if not answer or not answer.strip():
         raise BadRequestException(message="Please provide an answer")
@@ -1728,11 +1712,10 @@ def respond_interview(db: Session, verification: WorkerVerification, answer: str
     if done:
         interview.status = "completed"
         interview.submitted_at = _utcnow()
-    db.commit()
-    db.refresh(interview)
+    await interview.save()
 
     if done:
-        evaluation = _evaluate_interview(db, verification, interview)
+        evaluation = await _evaluate_interview(verification, interview)
         return {
             "done": True,
             "interview_score": evaluation.get("overall_score"),
@@ -1747,7 +1730,7 @@ def respond_interview(db: Session, verification: WorkerVerification, answer: str
     }
 
 
-def _evaluate_interview(db: Session, verification: WorkerVerification, interview: VoiceInterview) -> dict:
+async def _evaluate_interview(verification: WorkerVerification, interview: VoiceInterview) -> dict:
     history = _interview_history(interview)
     evaluation = None
     res = _gemini_interview_json(
@@ -1791,11 +1774,11 @@ def _evaluate_interview(db: Session, verification: WorkerVerification, interview
     interview.score = score
     interview.status = "completed"
     interview.submitted_at = _utcnow()
+    await interview.save()
 
     verification.interview_score = score
     verification.step = "completed"
-    db.commit()
-    db.refresh(interview)
+    await verification.save()
     return evaluation
 
 
@@ -1804,24 +1787,24 @@ def _evaluate_interview(db: Session, verification: WorkerVerification, interview
 # ---------------------------------------------------------------------------
 
 
-def compute_documents_score(worker: Worker) -> float:
+async def compute_documents_score(worker: Worker) -> float:
     """Documents = 10% of trust. Aadhaar verified is the main signal."""
     score = 0.0
     if worker.aadhaar_verified:
         score += 60.0
     else:
         score += 20.0
-    cert_count = len(worker.certificates or [])
+    cert_count = await Certificate.find(Certificate.worker_id == worker.id).count()
     score += min(25.0, cert_count * 8.0)
     if worker.aadhaar_number_hash:
         score += 15.0
     return round(min(100.0, score), 2)
 
 
-def compute_experience_score(worker: Worker) -> float:
+async def compute_experience_score(worker: Worker) -> float:
     """Experience & certificates = 5% of trust."""
     score = min(60.0, (worker.experience_years or 0) * 10.0)
-    cert_count = len(worker.certificates or [])
+    cert_count = await Certificate.find(Certificate.worker_id == worker.id).count()
     score += min(40.0, cert_count * 10.0)
     return round(min(100.0, score), 2)
 
@@ -1836,9 +1819,9 @@ def assign_badge(score: float) -> str:
     return BADGE_REJECTED
 
 
-def compute_trust_score(verification: WorkerVerification, worker: Worker) -> float:
-    docs = compute_documents_score(worker)
-    exp = compute_experience_score(worker)
+async def compute_trust_score(verification: WorkerVerification, worker: Worker) -> float:
+    docs = await compute_documents_score(worker)
+    exp = await compute_experience_score(worker)
     technical = verification.technical_score or 0.0
     practical = verification.practical_score or 0.0
     interview = verification.interview_score or 0.0
@@ -1980,7 +1963,7 @@ def _generate_certificate_pdf(
     return f"/uploads/certificates/{filename}"
 
 
-def generate_certificate(db: Session, verification: WorkerVerification, worker: Worker) -> dict:
+async def generate_certificate(verification: WorkerVerification, worker: Worker) -> dict:
     """Create QR + PDF and persist the VerificationCertificate row."""
     cert_no = "ONEDW-{}-{}".format(
         datetime.now().strftime("%Y%m"),
@@ -2004,18 +1987,13 @@ def generate_certificate(db: Session, verification: WorkerVerification, worker: 
     )
     qr_url = f"/uploads/certificates/qr_{cert_no}.png" if qr_path else None
 
-    cert = (
-        db.query(VerificationCertificate)
-        .filter(VerificationCertificate.verification_id == verification.id)
-        .first()
-    )
+    cert = await VerificationCertificate.find_one(VerificationCertificate.verification_id == verification.id)
     if cert is None:
         cert = VerificationCertificate(
             verification_id=verification.id,
             worker_id=verification.worker_id,
             certificate_no=cert_no,
         )
-        db.add(cert)
     cert.worker_name = worker.name
     cert.profession = verification.profession
     cert.trust_score = verification.trust_score or 0.0
@@ -2024,8 +2002,7 @@ def generate_certificate(db: Session, verification: WorkerVerification, worker: 
     cert.qr_code_url = qr_url
     cert.pdf_url = pdf_url
     cert.is_active = True
-    db.commit()
-    db.refresh(cert)
+    await cert.save()
 
     return {
         "certificate_no": cert.certificate_no,
@@ -2044,27 +2021,26 @@ def generate_certificate(db: Session, verification: WorkerVerification, worker: 
 # ---------------------------------------------------------------------------
 
 
-def get_active_verification(db: Session, worker_id: str) -> Optional[WorkerVerification]:
-    return (
-        db.query(WorkerVerification)
-        .filter(WorkerVerification.worker_id == worker_id, WorkerVerification.status.in_(["in_progress"]))
-        .order_by(WorkerVerification.attempt_number.desc())
-        .first()
-    )
+async def get_active_verification(worker_id: str) -> Optional[WorkerVerification]:
+    all_v = await WorkerVerification.find(
+        WorkerVerification.worker_id == worker_id,
+        WorkerVerification.status == "in_progress",
+    ).to_list()
+    if not all_v:
+        return None
+    return max(all_v, key=lambda v: v.attempt_number or 0)
 
 
-def get_latest_verification(db: Session, worker_id: str) -> Optional[WorkerVerification]:
-    return (
-        db.query(WorkerVerification)
-        .filter(WorkerVerification.worker_id == worker_id)
-        .order_by(WorkerVerification.created_at.desc())
-        .first()
-    )
+async def get_latest_verification(worker_id: str) -> Optional[WorkerVerification]:
+    all_v = await WorkerVerification.find(WorkerVerification.worker_id == worker_id).to_list()
+    if not all_v:
+        return None
+    return max(all_v, key=lambda v: v.created_at or datetime.min)
 
 
-def create_verification(db: Session, worker: Worker) -> WorkerVerification:
+async def create_verification(worker: Worker) -> WorkerVerification:
     """Create a new verification attempt, honouring the rejected retry cooldown."""
-    latest = get_latest_verification(db, worker.id)
+    latest = await get_latest_verification(worker.id)
     if latest and latest.badge == BADGE_REJECTED:
         if latest.retry_available_at and latest.retry_available_at > _utcnow():
             raise BadRequestException(
@@ -2086,20 +2062,34 @@ def create_verification(db: Session, worker: Worker) -> WorkerVerification:
         admin_status="pending",
         started_at=_utcnow(),
     )
-    db.add(verification)
-    db.commit()
-    db.refresh(verification)
+    await verification.insert()
     return verification
 
 
-def complete_verification(db: Session, verification: WorkerVerification, worker: Worker) -> dict:
+async def get_skill_test_session(verification_id: str) -> Optional[SkillTestSession]:
+    return await SkillTestSession.find_one(SkillTestSession.verification_id == verification_id)
+
+
+async def create_skill_test_session(verification: WorkerVerification, worker: Worker, language: str = "en") -> SkillTestSession:
+    session = SkillTestSession(
+        verification_id=verification.id,
+        worker_id=worker.id,
+        profession=verification.profession,
+        status="started",
+        started_at=_utcnow(),
+    )
+    await session.insert()
+    return session
+
+
+async def complete_verification(verification: WorkerVerification, worker: Worker) -> dict:
     """Finalise the attempt: trust score, badge, certificate, worker status."""
-    docs = compute_documents_score(worker)
-    exp = compute_experience_score(worker)
+    docs = await compute_documents_score(worker)
+    exp = await compute_experience_score(worker)
     verification.documents_score = docs
     verification.experience_score = exp
 
-    trust = compute_trust_score(verification, worker)
+    trust = await compute_trust_score(verification, worker)
     verification.trust_score = trust
     verification.badge = assign_badge(trust)
     verification.status = "completed"
@@ -2109,20 +2099,18 @@ def complete_verification(db: Session, verification: WorkerVerification, worker:
     if verification.badge == BADGE_REJECTED:
         verification.retry_available_at = _utcnow() + timedelta(days=REJECTED_RETRY_DAYS)
         worker.verification_status = "rejected"
-        worker.user.is_verified = False
     else:
         worker.verification_status = "completed"
-        worker.user.is_verified = True
 
     worker.trust_score = trust
     worker.verification_badge = verification.badge
+    await worker.save()
 
     certificate = None
     if verification.badge != BADGE_REJECTED:
-        certificate = generate_certificate(db, verification, worker)
+        certificate = await generate_certificate(verification, worker)
 
-    db.commit()
-    db.refresh(verification)
+    await verification.save()
 
     return {
         "verification_id": verification.id,
@@ -2144,14 +2132,15 @@ def complete_verification(db: Session, verification: WorkerVerification, worker:
 # Public helpers used by admin / serialization
 # ---------------------------------------------------------------------------
 
-def serialize_verification(verification: WorkerVerification, include_stages: bool = False) -> dict:
-    worker = verification.worker
+async def serialize_verification(verification: WorkerVerification, include_stages: bool = False) -> dict:
+    worker = await Worker.find_one(Worker.id == verification.worker_id)
+    user = await User.find_one(User.id == worker.user_id) if worker else None
     data = {
         "id": verification.id,
         "worker_id": verification.worker_id,
         "worker_name": worker.name if worker else None,
         "avatar": worker.avatar if worker else None,
-        "email": worker.user.email if worker and worker.user else None,
+        "email": user.email if user else None,
         "profession": verification.profession,
         "attempt_number": verification.attempt_number,
         "status": verification.status,
@@ -2175,10 +2164,10 @@ def serialize_verification(verification: WorkerVerification, include_stages: boo
         "is_demo": verification.is_demo,
     }
     if include_stages:
-        skill_test = verification.skill_test
-        practical = verification.practical
-        interview = verification.interview
-        cert = verification.certificate
+        skill_test = await SkillTestSession.find_one(SkillTestSession.verification_id == verification.id)
+        practical = await PracticalAssessment.find_one(PracticalAssessment.verification_id == verification.id)
+        interview = await VoiceInterview.find_one(VoiceInterview.verification_id == verification.id)
+        cert = await VerificationCertificate.find_one(VerificationCertificate.verification_id == verification.id)
         data["skill_test"] = {
             "id": skill_test.id if skill_test else None,
             "status": skill_test.status if skill_test else None,
@@ -2217,9 +2206,9 @@ def serialize_verification(verification: WorkerVerification, include_stages: boo
     return data
 
 
-def serialize_worker_verification_brief(worker: Worker) -> Optional[dict]:
+async def serialize_worker_verification_brief(worker: Worker) -> Optional[dict]:
     """Lightweight verification summary attached to worker list/detail responses."""
-    latest = get_latest_verification_plain(worker)
+    latest = await get_latest_verification_plain(worker)
     if latest is None:
         return None
     return {
@@ -2233,10 +2222,9 @@ def serialize_worker_verification_brief(worker: Worker) -> Optional[dict]:
     }
 
 
-def get_latest_verification_plain(worker: Worker) -> Optional[WorkerVerification]:
-    if not getattr(worker, "verifications", None):
-        return None
-    verifications = [v for v in worker.verifications if v.status == "completed"]
+async def get_latest_verification_plain(worker: Worker) -> Optional[WorkerVerification]:
+    verifications = await WorkerVerification.find(WorkerVerification.worker_id == worker.id).to_list()
+    verifications = [v for v in verifications if v.status == "completed"]
     if not verifications:
         return None
     return max(verifications, key=lambda v: v.created_at or datetime.min)

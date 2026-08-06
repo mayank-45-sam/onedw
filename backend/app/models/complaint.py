@@ -1,20 +1,24 @@
+"""Complaint Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Complaint(BaseModel):
-    __tablename__ = "complaints"
+class Complaint(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_id: str
+    booking_id: Optional[str] = None
+    worker_id: Optional[str] = None
+    subject: str
+    description: str
+    status: str = "open"
+    images: List[str] = Field(default_factory=list)
+    resolved_at: Optional[str] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    customer_id = Column(String(36), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
-    booking_id = Column(String(36), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="SET NULL"), nullable=True)
-    subject = Column(String(255), nullable=False)
-    description = Column(String(2000), nullable=False)
-    status = Column(String(50), default="open", nullable=False)
-    images = Column(JSON, default=list, nullable=True)
-    resolved_at = Column(String(30), nullable=True)
-
-    customer = relationship("Customer", back_populates="complaints")
+    class Settings:
+        name = "complaints"

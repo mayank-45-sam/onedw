@@ -1,24 +1,31 @@
+"""ImageAnalysis Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, Integer, DateTime, JSON, Text, Boolean
-from app.db.database import Base
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class ImageAnalysis(Base):
-    __tablename__ = "image_analyses"
+class ImageAnalysis(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None
+    image_url: str
+    detected_object: Optional[str] = None
+    problem: Optional[str] = None
+    confidence: float = 0.0
+    severity: Optional[str] = None
+    repair_difficulty: Optional[str] = None
+    estimated_time_minutes: Optional[int] = None
+    estimated_price_min: Optional[float] = None
+    estimated_price_max: Optional[float] = None
+    required_profession: Optional[str] = None
+    ai_suggestions: List[Any] = Field(default_factory=list)
+    recommended_workers: List[Any] = Field(default_factory=list)
+    raw_response: Optional[Dict[str, Any]] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), nullable=True)
-    image_url = Column(String(500), nullable=False)
-    detected_object = Column(String(255), nullable=True)
-    problem = Column(Text, nullable=True)
-    confidence = Column(Float, default=0.0)
-    severity = Column(String(20), nullable=True)
-    repair_difficulty = Column(String(20), nullable=True)
-    estimated_time_minutes = Column(Integer, nullable=True)
-    estimated_price_min = Column(Float, nullable=True)
-    estimated_price_max = Column(Float, nullable=True)
-    required_profession = Column(String(100), nullable=True)
-    ai_suggestions = Column(JSON, default=list)
-    recommended_workers = Column(JSON, default=list)
-    raw_response = Column(JSON, nullable=True)
-    created_at = Column(DateTime, nullable=True)
+    class Settings:
+        name = "image_analyses"

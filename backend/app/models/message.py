@@ -1,20 +1,24 @@
+"""Message Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import Any, Dict, List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Message(BaseModel):
-    __tablename__ = "messages"
+class Message(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    conversation_id: str
+    sender_id: str
+    receiver_id: str
+    text: Optional[str] = None
+    image: Optional[str] = None
+    voice_note: Optional[Dict[str, Any]] = None
+    attachments: List[str] = Field(default_factory=list)
+    status: str = "sent"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    receiver_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    text = Column(String(5000), nullable=True)
-    image = Column(String(500), nullable=True)
-    voice_note = Column(JSON, nullable=True)
-    attachments = Column(JSON, default=list, nullable=True)
-    status = Column(String(20), default="sent", nullable=False)
-
-    conversation = relationship("Conversation", back_populates="messages")
+    class Settings:
+        name = "messages"

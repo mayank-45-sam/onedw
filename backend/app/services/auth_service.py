@@ -1,6 +1,7 @@
-from typing import Optional
+"""Async Auth service — MongoDB/Beanie version."""
+from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
@@ -24,13 +25,12 @@ from app.core.exceptions import (
 class AuthService:
     """Service for authentication operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
-        self.user_repo = UserRepository(db)
-        self.token_service = TokenService(db)
-        self.otp_service = OTPService(db)
+    def __init__(self):
+        self.user_repo = UserRepository()
+        self.token_service = TokenService()
+        self.otp_service = OTPService()
 
-    def register(
+    async def register(
         self,
         name: str,
         email: str,
@@ -45,10 +45,10 @@ class AuthService:
                 code="FORBIDDEN",
             )
 
-        if self.user_repo.email_exists(email):
+        if await self.user_repo.email_exists(email):
             raise ConflictException(message="Email already registered")
 
-        if phone and self.user_repo.phone_exists(phone):
+        if phone and await self.user_repo.phone_exists(phone):
             raise ConflictException(message="Phone number already registered")
 
         password_hash = get_password_hash(password)
@@ -61,25 +61,22 @@ class AuthService:
             is_active=True,
             is_verified=False,
         )
-        self.db.add(user)
-        self.db.flush()
+        await user.insert()
 
         if role == UserRole.CUSTOMER:
-            self.db.add(Customer(user_id=user.id, name=name))
+            await Customer(user_id=user.id, name=name).insert()
         elif role == UserRole.ADMIN:
-            self.db.add(Admin(user_id=user.id, name=name))
+            await Admin(user_id=user.id, name=name).insert()
         elif role == UserRole.WORKER:
-            self.db.add(Worker(user_id=user.id, name=name, profession="", hourly_rate=0.0))
+            await Worker(user_id=user.id, name=name, profession="", hourly_rate=0.0).insert()
 
-        self.db.add(Wallet(user_id=user.id))
-        self.db.commit()
-        self.db.refresh(user)
+        await Wallet(user_id=user.id).insert()
 
-        access_token, refresh_token, expires_in = self.token_service.create_token_pair(
+        access_token, refresh_token, expires_in = await self.token_service.create_token_pair(
             user.id, user.role.value
         )
 
-        profile = self._get_profile(user)
+        profile = await self._get_profile(user)
 
         return {
             "access_token": access_token,
@@ -97,9 +94,9 @@ class AuthService:
             },
         }
 
-    def login(self, email: str, password: str) -> dict:
+    async def login(self, email: str, password: str) -> dict:
         """Login with email and password. Returns dict with user and tokens."""
-        user = self.user_repo.get_by_email(email)
+        user = await self.user_repo.get_by_email(email)
         if user is None:
             raise UnauthorizedException(message="Invalid email or password")
 
@@ -109,11 +106,11 @@ class AuthService:
         if not verify_password(password, user.password_hash):
             raise UnauthorizedException(message="Invalid email or password")
 
-        access_token, refresh_token, expires_in = self.token_service.create_token_pair(
+        access_token, refresh_token, expires_in = await self.token_service.create_token_pair(
             user.id, user.role.value
         )
 
-        profile = self._get_profile(user)
+        profile = await self._get_profile(user)
 
         return {
             "access_token": access_token,
@@ -131,18 +128,18 @@ class AuthService:
             },
         }
 
-    def refresh_token(self, refresh_token: str) -> dict:
+    async def refresh_token(self, refresh_token: str) -> dict:
         """Refresh access token using refresh token rotation."""
-        result = self.token_service.rotate_refresh_token(refresh_token)
+        result = await self.token_service.rotate_refresh_token(refresh_token)
         if result is None:
             raise UnauthorizedException(message="Invalid or expired refresh token")
 
         new_access, new_refresh, expires_in, user_id = result
-        user = self.user_repo.get(user_id)
+        user = await self.user_repo.get(user_id)
         if user is None or not user.is_active:
             raise UnauthorizedException(message="User not found or deactivated")
 
-        profile = self._get_profile(user)
+        profile = await self._get_profile(user)
 
         return {
             "access_token": new_access,
@@ -160,62 +157,68 @@ class AuthService:
             },
         }
 
-    def logout(self, refresh_token: str) -> None:
+    async def logout(self, refresh_token: str) -> None:
         """Logout by revoking refresh token."""
-        self.token_service.revoke_refresh_token(refresh_token)
+        await self.token_service.revoke_refresh_token(refresh_token)
 
-    def logout_all(self, user_id: str) -> None:
+    async def logout_all(self, user_id: str) -> None:
         """Logout from all devices."""
-        self.token_service.revoke_all_user_tokens(user_id)
+        await self.token_service.revoke_all_user_tokens(user_id)
 
-    def forgot_password(self, email: str) -> None:
+    async def forgot_password(self, email: str) -> None:
         """Generate password reset OTP."""
-        user = self.user_repo.get_by_email(email)
+        user = await self.user_repo.get_by_email(email)
         if user is None:
             return
-        self.otp_service.create_otp(email, "password_reset")
+        await self.otp_service.create_otp(email, "password_reset")
 
-    def reset_password(self, email: str, otp_code: str, new_password: str) -> None:
+    async def reset_password(self, email: str, otp_code: str, new_password: str) -> None:
         """Reset password using OTP."""
-        verified = self.otp_service.verify_otp(email, "password_reset", otp_code)
+        verified = await self.otp_service.verify_otp(email, "password_reset", otp_code)
         if not verified:
             raise BadRequestException(message="Invalid or expired OTP")
 
-        user = self.user_repo.get_by_email(email)
+        user = await self.user_repo.get_by_email(email)
         if user is None:
             raise NotFoundException(message="User not found")
 
         user.password_hash = get_password_hash(new_password)
-        self.db.commit()
-        self.token_service.revoke_all_user_tokens(user.id)
+        await user.save()
+        await self.token_service.revoke_all_user_tokens(user.id)
 
-    def request_email_verification(self, email: str) -> None:
+    async def request_email_verification(self, email: str) -> None:
         """Request email verification OTP."""
-        self.otp_service.create_otp(email, "email_verification")
+        await self.otp_service.create_otp(email, "email_verification")
 
-    def verify_email(self, email: str, otp_code: str) -> bool:
+    async def verify_email(self, email: str, otp_code: str) -> bool:
         """Verify email using OTP."""
-        verified = self.otp_service.verify_otp(email, "email_verification", otp_code)
+        verified = await self.otp_service.verify_otp(email, "email_verification", otp_code)
         if not verified:
             return False
 
-        user = self.user_repo.get_by_email(email)
+        user = await self.user_repo.get_by_email(email)
         if user is None:
             return False
 
-        self.user_repo.verify_user(user)
+        await self.user_repo.verify_user(user)
         return True
 
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
+    async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
-        return self.user_repo.get(user_id)
+        return await self.user_repo.get(user_id)
 
-    def _get_profile(self, user: User) -> Optional[dict]:
-        """Get profile data from user's role-specific profile."""
-        if user.role == UserRole.CUSTOMER and user.customer_profile:
-            return {"name": user.customer_profile.name, "avatar": user.customer_profile.avatar}
-        elif user.role == UserRole.WORKER and user.worker_profile:
-            return {"name": user.worker_profile.name, "avatar": user.worker_profile.avatar}
-        elif user.role == UserRole.ADMIN and user.admin_profile:
-            return {"name": user.admin_profile.name, "avatar": user.admin_profile.avatar}
+    async def _get_profile(self, user: User) -> Optional[dict]:
+        """Get profile data from user's role-specific profile collection."""
+        if user.role == UserRole.CUSTOMER:
+            profile = await Customer.find_one(Customer.user_id == user.id)
+            if profile:
+                return {"name": profile.name, "avatar": profile.avatar}
+        elif user.role == UserRole.WORKER:
+            profile = await Worker.find_one(Worker.user_id == user.id)
+            if profile:
+                return {"name": profile.name, "avatar": profile.avatar}
+        elif user.role == UserRole.ADMIN:
+            profile = await Admin.find_one(Admin.user_id == user.id)
+            if profile:
+                return {"name": profile.name, "avatar": profile.avatar}
         return None

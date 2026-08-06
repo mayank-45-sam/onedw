@@ -1,21 +1,22 @@
+"""Customer profile Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import Any, Dict, List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Customer(BaseModel):
-    __tablename__ = "customers"
+class Customer(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    avatar: Optional[str] = None
+    address: Optional[Dict[str, Any]] = None
+    favorite_services: List[str] = Field(default_factory=list)
+    favorite_workers: List[str] = Field(default_factory=list)
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    avatar = Column(String(500), nullable=True)
-    address = Column(JSON, nullable=True)
-    favorite_services = Column(JSON, default=list, nullable=True)
-    favorite_workers = Column(JSON, default=list, nullable=True)
-
-    user = relationship("User", back_populates="customer_profile")
-    bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id")
-    reviews = relationship("Review", back_populates="customer")
-    complaints = relationship("Complaint", back_populates="customer")
+    class Settings:
+        name = "customers"

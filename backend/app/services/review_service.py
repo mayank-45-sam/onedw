@@ -1,5 +1,7 @@
+"""Async Review service — Beanie version."""
+from __future__ import annotations
+
 from typing import Optional
-from sqlalchemy.orm import Session
 
 from app.models.booking import Booking, BookingStatus
 from app.models.review import Review
@@ -13,12 +15,11 @@ from app.core.exceptions import BadRequestException, NotFoundException
 class ReviewService:
     """Service for review operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
-        self.repo = ReviewRepository(db)
-        self.booking_repo = BookingRepository(db)
+    def __init__(self):
+        self.repo = ReviewRepository()
+        self.booking_repo = BookingRepository()
 
-    def create_review(
+    async def create_review(
         self,
         customer_id: str,
         booking_id: str,
@@ -31,17 +32,18 @@ class ReviewService:
         work_images: Optional[list] = None,
         recommends: bool = True,
     ) -> dict:
-        booking = self.booking_repo.get(booking_id)
+        booking = await self.booking_repo.get(booking_id)
         if booking is None:
             raise NotFoundException(message="Booking not found")
 
         if booking.customer_id != customer_id:
             raise BadRequestException(message="You can only review your own bookings")
 
-        if booking.status != BookingStatus.COMPLETED:
+        status = booking.status.value if hasattr(booking.status, "value") else booking.status
+        if status != BookingStatus.COMPLETED.value:
             raise BadRequestException(message="Can only review completed bookings")
 
-        existing = self.repo.get_by_booking(booking_id)
+        existing = await self.repo.get_by_booking(booking_id)
         if existing is not None:
             raise BadRequestException(message="You have already reviewed this booking")
 
@@ -59,67 +61,49 @@ class ReviewService:
             work_images=work_images,
             recommends=recommends,
         )
-        self.db.add(review)
-        self.db.flush()
+        await review.insert()
 
         if booking.worker_id:
-            self._update_worker_rating(booking.worker_id)
+            await self._update_worker_rating(booking.worker_id)
         if booking.service_id:
-            self._update_service_rating(booking.service_id)
-
-        self.db.commit()
-        self.db.refresh(review)
+            await self._update_service_rating(booking.service_id)
 
         return self._serialize(review)
 
-    def get_worker_reviews(
-        self, worker_id: str, page: int = 1, limit: int = 20
-    ) -> dict:
+    async def get_worker_reviews(self, worker_id: str, page: int = 1, limit: int = 20) -> dict:
         skip = (page - 1) * limit
-        items, total = self.repo.get_by_worker(
-            worker_id=worker_id, skip=skip, limit=limit
-        )
+        items, total = await self.repo.get_by_worker(worker_id=worker_id, skip=skip, limit=limit)
         pages = (total + limit - 1) // limit if limit > 0 else 0
-
-        avg_rating = self.repo.get_worker_average_rating(worker_id)
-        review_count = self.repo.get_worker_review_count(worker_id)
-
+        avg_rating = await self.repo.get_worker_average_rating(worker_id)
+        review_count = await self.repo.get_worker_review_count(worker_id)
         return {
             "data": [self._serialize(r) for r in items],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-            "average_rating": avg_rating,
-            "review_count": review_count,
+            "total": total, "page": page, "limit": limit, "pages": pages,
+            "average_rating": avg_rating, "review_count": review_count,
         }
 
-    def _update_worker_rating(self, worker_id: str) -> None:
-        avg = self.repo.get_worker_average_rating(worker_id)
-        count = self.repo.get_worker_review_count(worker_id)
-        worker = self.db.query(Worker).filter(Worker.id == worker_id).first()
+    async def _update_worker_rating(self, worker_id: str) -> None:
+        avg = await self.repo.get_worker_average_rating(worker_id)
+        count = await self.repo.get_worker_review_count(worker_id)
+        worker = await Worker.find_one(Worker.id == worker_id)
         if worker:
             worker.rating = avg
             worker.review_count = count
+            await worker.save()
 
-    def _update_service_rating(self, service_id: str) -> None:
-        from sqlalchemy import func
-
-        result = (
-            self.db.query(func.avg(Review.rating))
-            .filter(Review.service_id == service_id)
-            .scalar()
-        )
-        count = (
-            self.db.query(func.count(Review.id))
-            .filter(Review.service_id == service_id)
-            .scalar()
-            or 0
-        )
-        service = self.db.query(Service).filter(Service.id == service_id).first()
+    async def _update_service_rating(self, service_id: str) -> None:
+        reviews = await Review.find(Review.service_id == service_id).to_list()
+        if reviews:
+            avg = round(sum(r.rating for r in reviews) / len(reviews), 2)
+            count = len(reviews)
+        else:
+            avg = 0.0
+            count = 0
+        service = await Service.find_one(Service.id == service_id)
         if service:
-            service.rating = round(float(result), 2) if result else 0.0
+            service.rating = avg
             service.review_count = count
+            await service.save()
 
     def _serialize(self, review) -> dict:
         return {

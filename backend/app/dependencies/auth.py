@@ -1,11 +1,13 @@
-from typing import Optional, Callable
-from fastapi import Depends, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+"""Auth dependencies — no DB session injection (Beanie is global state)."""
+from __future__ import annotations
 
-from app.db.database import get_db
+from typing import Callable, Optional
+
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.security import decode_token
-from app.core.exceptions import UnauthorizedException, ForbiddenException
 from app.models.user import User
 
 security = HTTPBearer()
@@ -13,11 +15,10 @@ security = HTTPBearer()
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token.
-    Returns the full User ORM object from the database.
+    Returns the full User document from MongoDB via Beanie.
     """
     token = credentials.credentials
     payload = decode_token(token)
@@ -32,7 +33,7 @@ async def get_current_user(
     if user_id is None:
         raise UnauthorizedException(message="Invalid token payload")
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = await User.find_one(User.id == user_id)
     if user is None:
         raise UnauthorizedException(message="User not found")
 
@@ -44,7 +45,6 @@ async def get_current_user(
 
 async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
-    db: Session = Depends(get_db),
 ) -> Optional[User]:
     """
     Optional dependency to get the current user if token is provided.
@@ -63,7 +63,7 @@ async def get_optional_user(
     if user_id is None:
         return None
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = await User.find_one(User.id == user_id)
     if user is None or not user.is_active:
         return None
 

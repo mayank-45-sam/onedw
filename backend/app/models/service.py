@@ -1,27 +1,30 @@
+"""Service Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import List, Optional
+
+from beanie import Indexed
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Service(BaseModel):
-    __tablename__ = "services"
+class Service(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    slug: Indexed(str, unique=True)  # type: ignore[valid-type]
+    description: str
+    category_id: Optional[str] = None
+    image: Optional[str] = None
+    gallery: List[str] = Field(default_factory=list)
+    base_price: float
+    duration: int
+    rating: float = 0.0
+    review_count: int = 0
+    popular: bool = False
+    trending: bool = False
+    tags: List[str] = Field(default_factory=list)
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(255), nullable=False)
-    slug = Column(String(255), unique=True, nullable=False, index=True)
-    description = Column(String(2000), nullable=False)
-    category_id = Column(String(36), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
-    image = Column(String(500), nullable=True)
-    gallery = Column(JSON, default=list, nullable=True)
-    base_price = Column(Float, nullable=False)
-    duration = Column(Integer, nullable=False)
-    rating = Column(Float, default=0.0, nullable=False)
-    review_count = Column(Integer, default=0, nullable=False)
-    popular = Column(Boolean, default=False, nullable=False)
-    trending = Column(Boolean, default=False, nullable=False)
-    tags = Column(JSON, default=list, nullable=True)
-
-    category = relationship("Category", back_populates="services")
-    bookings = relationship("Booking", back_populates="service")
-    reviews = relationship("Review", back_populates="service")
+    class Settings:
+        name = "services"

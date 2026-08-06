@@ -1,6 +1,12 @@
-from typing import Optional
-from sqlalchemy.orm import Session
+"""Async Worker service — Beanie version."""
+from __future__ import annotations
 
+from typing import Optional
+
+from app.models.user import User
+from app.models.worker_skill import WorkerSkill
+from app.models.worker_language import WorkerLanguage
+from app.models.worker_availability import WorkerAvailability
 from app.repositories.worker_repository import WorkerRepository
 from app.core.exceptions import NotFoundException
 
@@ -8,11 +14,10 @@ from app.core.exceptions import NotFoundException
 class WorkerService:
     """Service for worker listing operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
-        self.repo = WorkerRepository(db)
+    def __init__(self):
+        self.repo = WorkerRepository()
 
-    def list_workers(
+    async def list_workers(
         self,
         page: int = 1,
         limit: int = 20,
@@ -26,7 +31,7 @@ class WorkerService:
         sort_by: Optional[str] = None,
     ) -> dict:
         skip = (page - 1) * limit
-        items, total = self.repo.search(
+        items, total = await self.repo.search(
             skip=skip,
             limit=limit,
             category_id=category_id,
@@ -40,23 +45,30 @@ class WorkerService:
         )
         pages = (total + limit - 1) // limit if limit > 0 else 0
 
+        serialized = []
+        for w in items:
+            user = await User.find_one(User.id == w.user_id)
+            serialized.append(self._serialize(w, user))
+
         return {
-            "data": [self._serialize(w) for w in items],
+            "data": serialized,
             "total": total,
             "page": page,
             "limit": limit,
             "pages": pages,
         }
 
-    def get_worker(self, worker_id: str) -> dict:
-        worker = self.repo.get_with_details(worker_id)
+    async def get_worker(self, worker_id: str) -> dict:
+        worker = await self.repo.get(worker_id)
         if worker is None:
             raise NotFoundException(message="Worker not found")
-        return self._serialize_detail(worker)
+        user = await User.find_one(User.id == worker.user_id)
+        skills = await WorkerSkill.find(WorkerSkill.worker_id == worker_id).to_list()
+        languages = await WorkerLanguage.find(WorkerLanguage.worker_id == worker_id).to_list()
+        availability = await WorkerAvailability.find(WorkerAvailability.worker_id == worker_id).to_list()
+        return self._serialize_detail(worker, user, skills, languages, availability)
 
-    def _serialize(self, worker) -> dict:
-        user = worker.user
-        from app.services.verification_service import serialize_worker_verification_brief
+    def _serialize(self, worker, user=None) -> dict:
         return {
             "id": worker.id,
             "user_id": worker.user_id,
@@ -76,19 +88,12 @@ class WorkerService:
             "is_verified": user.is_verified if user else False,
             "trust_score": worker.trust_score,
             "verification_badge": worker.verification_badge,
-            "verification": serialize_worker_verification_brief(worker),
+            "verification_status": worker.verification_status,
         }
 
-    def _serialize_detail(self, worker) -> dict:
-        data = self._serialize(worker)
-        data["skills"] = [
-            {"id": s.id, "skill": s.skill} for s in (worker.skills or [])
-        ]
-        data["languages"] = [
-            {"id": l.id, "language": l.language} for l in (worker.languages or [])
-        ]
-        data["availability"] = [
-            {"id": a.id, "day": a.day, "slots": a.slots}
-            for a in (worker.availability or [])
-        ]
+    def _serialize_detail(self, worker, user=None, skills=None, languages=None, availability=None) -> dict:
+        data = self._serialize(worker, user)
+        data["skills"] = [{"id": s.id, "skill": s.skill} for s in (skills or [])]
+        data["languages"] = [{"id": l.id, "language": l.language} for l in (languages or [])]
+        data["availability"] = [{"id": a.id, "day": a.day, "slots": a.slots} for a in (availability or [])]
         return data

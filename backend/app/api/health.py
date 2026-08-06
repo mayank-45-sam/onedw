@@ -1,27 +1,22 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
 
 from app.core.config import settings
 from app.core.response import HealthResponse
-from app.db.database import get_db
+from app.db.database import check_database_connection
 
 router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
-async def health_check(db: Session = Depends(get_db)) -> HealthResponse:
+async def health_check() -> HealthResponse:
     """
     Health check endpoint to verify API and database connectivity.
     """
-    try:
-        db.execute(text("SELECT 1"))
-        db_status = "connected"
-    except Exception:
-        db_status = "disconnected"
+    db_ok = await check_database_connection()
+    db_status = "connected" if db_ok else "disconnected"
 
     return HealthResponse(
-        status="healthy" if db_status == "connected" else "unhealthy",
+        status="healthy" if db_ok else "unhealthy",
         app_name=settings.APP_NAME,
         app_version="1.0.0",
         environment=settings.APP_ENV,

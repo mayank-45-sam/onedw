@@ -1,77 +1,92 @@
-from typing import Generic, TypeVar, Type, List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete, func
-from app.db.database import Base
+"""Base async Beanie repository with common CRUD operations."""
+from __future__ import annotations
 
-ModelType = TypeVar("ModelType", bound=Base)
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+
+from beanie import Document
+
+DocType = TypeVar("DocType", bound=Document)
 
 
-class BaseRepository(Generic[ModelType]):
-    """Base repository with common CRUD operations."""
+class BaseRepository(Generic[DocType]):
+    """Base repository — all methods are async (Beanie)."""
 
-    def __init__(self, model: Type[ModelType], db: Session):
+    def __init__(self, model: Type[DocType]):
         self.model = model
-        self.db = db
 
-    def get(self, id: Any) -> Optional[ModelType]:
-        """Get a single record by ID."""
-        return self.db.query(self.model).filter(self.model.id == id).first()
+    async def get(self, id: Any) -> Optional[DocType]:
+        """Get a single document by its string id field."""
+        return await self.model.find_one(self.model.id == id)  # type: ignore[attr-defined]
 
-    def get_by(self, **kwargs) -> Optional[ModelType]:
-        """Get a single record by filters."""
-        return self.db.query(self.model).filter_by(**kwargs).first()
+    async def get_by(self, **kwargs) -> Optional[DocType]:
+        """Get a single document matching all keyword filters."""
+        conditions = [
+            getattr(self.model, k) == v
+            for k, v in kwargs.items()
+            if hasattr(self.model, k)
+        ]
+        if not conditions:
+            return None
+        query = conditions[0]
+        for cond in conditions[1:]:
+            query &= cond
+        return await self.model.find_one(query)  # type: ignore[arg-type]
 
-    def get_all(
+    async def get_all(
         self,
         skip: int = 0,
         limit: int = 100,
-        **filters
-    ) -> List[ModelType]:
-        """Get all records with optional pagination and filters."""
-        query = self.db.query(self.model)
-        
-        for key, value in filters.items():
-            if hasattr(self.model, key):
-                query = query.filter(getattr(self.model, key) == value)
-        
-        return query.offset(skip).limit(limit).all()
+        **filters,
+    ) -> List[DocType]:
+        """Get all documents with optional pagination and equality filters."""
+        conditions = [
+            getattr(self.model, k) == v
+            for k, v in filters.items()
+            if hasattr(self.model, k)
+        ]
+        if conditions:
+            query = conditions[0]
+            for cond in conditions[1:]:
+                query &= cond
+            return await self.model.find(query).skip(skip).limit(limit).to_list()  # type: ignore[arg-type]
+        return await self.model.find_all().skip(skip).limit(limit).to_list()
 
-    def create(self, obj_in: Dict[str, Any]) -> ModelType:
-        """Create a new record."""
+    async def create(self, obj_in: Dict[str, Any]) -> DocType:
+        """Create and insert a new document."""
         db_obj = self.model(**obj_in)
-        self.db.add(db_obj)
-        self.db.commit()
-        self.db.refresh(db_obj)
+        await db_obj.insert()
         return db_obj
 
-    def update(self, db_obj: ModelType, obj_in: Dict[str, Any]) -> ModelType:
-        """Update an existing record."""
+    async def update(self, db_obj: DocType, obj_in: Dict[str, Any]) -> DocType:
+        """Update fields on an existing document and save."""
         for field, value in obj_in.items():
             if hasattr(db_obj, field):
                 setattr(db_obj, field, value)
-        
-        self.db.commit()
-        self.db.refresh(db_obj)
+        await db_obj.save()
         return db_obj
 
-    def delete(self, id: Any) -> Optional[ModelType]:
-        """Delete a record by ID."""
-        obj = self.get(id)
+    async def delete(self, id: Any) -> Optional[DocType]:
+        """Delete a document by id; returns the deleted document or None."""
+        obj = await self.get(id)
         if obj:
-            self.db.delete(obj)
-            self.db.commit()
+            await obj.delete()
         return obj
 
-    def count(self, **filters) -> int:
-        """Count records with optional filters."""
-        query = self.db.query(func.count(self.model.id))
-        
-        for key, value in filters.items():
-            if hasattr(self.model, key):
-                query = query.filter(getattr(self.model, key) == value)
-        
-        return query.scalar() or 0
+    async def count(self, **filters) -> int:
+        """Count documents matching optional equality filters."""
+        conditions = [
+            getattr(self.model, k) == v
+            for k, v in filters.items()
+            if hasattr(self.model, k)
+        ]
+        if conditions:
+            query = conditions[0]
+            for cond in conditions[1:]:
+                query &= cond
+            return await self.model.find(query).count()  # type: ignore[arg-type]
+        return await self.model.find_all().count()
 
-    def exists(self, **kwargs) -> bool:
-        """Check if a record exists with given filters."""
-        return self.db.query(self.model).filter_by(**kwargs).first() is not None
+    async def exists(self, **kwargs) -> bool:
+        """Return True if at least one matching document exists."""
+        doc = await self.get_by(**kwargs)
+        return doc is not None

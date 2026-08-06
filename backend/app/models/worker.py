@@ -1,40 +1,36 @@
+"""Worker profile Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Boolean, Float, Integer, ForeignKey, JSON, DateTime
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Worker(BaseModel):
-    __tablename__ = "workers"
+class Worker(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    avatar: Optional[str] = None
+    cover_image: Optional[str] = None
+    profession: str
+    bio: Optional[str] = None
+    experience_years: int = 0
+    completed_jobs: int = 0
+    rating: float = 0.0
+    review_count: int = 0
+    hourly_rate: float
+    is_online: bool = False
+    category_ids: List[str] = Field(default_factory=list)
+    aadhaar_number_hash: Optional[str] = None
+    aadhaar_verified: bool = False
+    aadhaar_verified_at: Optional[datetime] = None
+    verification_status: Optional[str] = None  # not_started | in_progress | completed | rejected
+    trust_score: Optional[float] = None
+    verification_badge: Optional[str] = None  # gold | pro | beginner | rejected
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    avatar = Column(String(500), nullable=True)
-    cover_image = Column(String(500), nullable=True)
-    profession = Column(String(255), nullable=False)
-    bio = Column(String(1000), nullable=True)
-    experience_years = Column(Integer, default=0, nullable=False)
-    completed_jobs = Column(Integer, default=0, nullable=False)
-    rating = Column(Float, default=0.0, nullable=False)
-    review_count = Column(Integer, default=0, nullable=False)
-    hourly_rate = Column(Float, nullable=False)
-    is_online = Column(Boolean, default=False, nullable=False)
-    category_ids = Column(JSON, default=list, nullable=True)
-    aadhaar_number_hash = Column(String(64), nullable=True, index=True)
-    aadhaar_verified = Column(Boolean, default=False, nullable=False)
-    aadhaar_verified_at = Column(DateTime(timezone=True), nullable=True)
-    verification_status = Column(String(30), nullable=True)  # not_started | in_progress | completed | rejected
-    trust_score = Column(Float, nullable=True)
-    verification_badge = Column(String(20), nullable=True)  # gold | pro | beginner | rejected
-
-    user = relationship("User", back_populates="worker_profile")
-    verifications = relationship("WorkerVerification", back_populates="worker", cascade="all, delete-orphan")
-    bookings = relationship("Booking", back_populates="worker", foreign_keys="Booking.worker_id")
-    reviews = relationship("Review", back_populates="worker")
-    portfolio_images = relationship("PortfolioImage", back_populates="worker", cascade="all, delete-orphan")
-    certificates = relationship("Certificate", back_populates="worker", cascade="all, delete-orphan")
-    availability = relationship("WorkerAvailability", back_populates="worker", cascade="all, delete-orphan")
-    location = relationship("WorkerLocation", back_populates="worker", uselist=False, cascade="all, delete-orphan")
-    skills = relationship("WorkerSkill", back_populates="worker", cascade="all, delete-orphan")
-    languages = relationship("WorkerLanguage", back_populates="worker", cascade="all, delete-orphan")
+    class Settings:
+        name = "workers"

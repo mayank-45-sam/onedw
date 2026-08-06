@@ -1,8 +1,12 @@
+"""Async Image Analysis service — Beanie version."""
+from __future__ import annotations
+
 import json
 import base64
 from typing import Optional
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
+
+import httpx
 from google import genai
 from google.genai import types
 from loguru import logger
@@ -41,7 +45,6 @@ def _get_gemini_client() -> Optional[genai.Client]:
 
 
 def _parse_ai_json(text: str) -> dict:
-    """Extract a JSON object from a Gemini response, tolerating code fences and truncation."""
     cleaned = (text or "").strip()
     for prefix in ("```json", "```"):
         if cleaned.startswith(prefix):
@@ -68,7 +71,43 @@ def _parse_ai_json(text: str) -> dict:
     raise ValueError("Could not parse AI response as JSON")
 
 
-def _find_recommended_workers(db: Session, profession: str, limit: int = 3) -> list[dict]:
+async def _analyze_with_openrouter(image_bytes: bytes, mime_type: str) -> dict:
+    if not settings.AI_API_KEY:
+        raise ValueError("OpenRouter API not configured")
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    image_url = f"data:{mime_type};base64,{b64}"
+
+    payload = {
+        "model": settings.AI_MODEL,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": ANALYSIS_PROMPT},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]}],
+        "max_tokens": 4096,
+        "temperature": 0.2,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.AI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{settings.AI_API_BASE_URL}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+        if response.status_code != 200:
+            raise ValueError(f"OpenRouter API error {response.status_code}: {response.text[:300]}")
+
+        data = response.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return _parse_ai_json(content)
+
+
+async def _find_recommended_workers(profession: str, limit: int = 3) -> list:
     profession_keywords = {
         "plumber": ["plumber", "plumbing", "pipe", "water"],
         "electrician": ["electrician", "electrical", "electric", "wiring"],
@@ -77,12 +116,10 @@ def _find_recommended_workers(db: Session, profession: str, limit: int = 3) -> l
         "general technician": [],
     }
     keywords = profession_keywords.get(profession.lower(), [])
-    workers = db.query(Worker).filter(
-        Worker.is_online == True
-    ).order_by(Worker.rating.desc(), Worker.completed_jobs.desc()).limit(20).all()
 
+    all_workers = await Worker.find(Worker.is_online == True).to_list()
     scored = []
-    for w in workers:
+    for w in all_workers:
         score = 0
         prof_lower = (w.profession or "").lower()
         bio_lower = (w.bio or "").lower()
@@ -98,34 +135,36 @@ def _find_recommended_workers(db: Session, profession: str, limit: int = 3) -> l
                 if kw in prof_lower or kw in bio_lower:
                     score += 1
 
-        fd = db.query(WorkerFraudData).filter(WorkerFraudData.worker_id == w.id).first()
+        fd = await WorkerFraudData.find_one(WorkerFraudData.worker_id == w.id)
         trust_score = 100.0
         risk_level = "low"
         if fd:
-            trust_score = max(0, 100.0 - fd.fraud_score)
-            risk_level = fd.risk_level
+            trust_score = max(0, 100.0 - (fd.fraud_score or 0))
+            risk_level = fd.risk_level or "low"
 
         scored.append({
-            "worker_id": w.id,
-            "name": w.name,
-            "avatar": w.avatar or "",
-            "profession": w.profession,
-            "rating": w.rating,
-            "experience_years": w.experience_years,
-            "completed_jobs": w.completed_jobs,
-            "hourly_rate": w.hourly_rate,
-            "trust_score": trust_score,
-            "risk_level": risk_level,
-            "estimated_arrival": "30 mins",
-            "score": score,
+            "worker_id": w.id, "name": w.name, "avatar": w.avatar or "",
+            "profession": w.profession, "rating": w.rating,
+            "experience_years": w.experience_years, "completed_jobs": w.completed_jobs,
+            "hourly_rate": w.hourly_rate, "trust_score": trust_score,
+            "risk_level": risk_level, "estimated_arrival": "30 mins", "score": score,
         })
 
-    scored.sort(key=lambda x: (x["trust_score"], x["rating"], x["score"]), reverse=True)
+    scored.sort(key=lambda x: (x["trust_score"], x["rating"] or 0, x["score"]), reverse=True)
     return scored[:limit]
 
 
+def _call_gemini(client, image_bytes: bytes, mime_type: str) -> dict:
+    image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=[ANALYSIS_PROMPT, image_part],
+        config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=4096),
+    )
+    return _parse_ai_json(response.text or "")
+
+
 async def analyze_image(
-    db: Session,
     image_bytes: bytes,
     mime_type: str,
     user_id: Optional[str] = None,
@@ -134,80 +173,65 @@ async def analyze_image(
     if not client:
         raise ValueError("Gemini API not configured. Set GEMINI_API_KEY in .env")
 
+    last_error = None
     try:
-        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=[ANALYSIS_PROMPT, image_part],
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                max_output_tokens=4096,
-            ),
-        )
-
-        result = _parse_ai_json(response.text or "")
-
-        required = ["detected_object", "problem", "confidence", "severity",
-                     "repair_difficulty", "estimated_time_minutes",
-                     "estimated_price_min", "estimated_price_max",
-                     "required_profession", "ai_suggestions"]
-        for key in required:
-            if key not in result:
-                result[key] = None if key != "ai_suggestions" else []
-
-        profession = result.get("required_profession", "")
-        recommended = _find_recommended_workers(db, profession) if profession else []
-        result["recommended_workers"] = recommended
-
-        if settings.GEMINI_API_KEY:
-            record = ImageAnalysis(
-                user_id=user_id,
-                image_url="",
-                detected_object=result.get("detected_object"),
-                problem=result.get("problem"),
-                confidence=result.get("confidence"),
-                severity=result.get("severity"),
-                repair_difficulty=result.get("repair_difficulty"),
-                estimated_time_minutes=result.get("estimated_time_minutes"),
-                estimated_price_min=result.get("estimated_price_min"),
-                estimated_price_max=result.get("estimated_price_max"),
-                required_profession=profession,
-                ai_suggestions=result.get("ai_suggestions", []),
-                recommended_workers=recommended,
-                raw_response=result,
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(record)
-            db.commit()
-            db.refresh(record)
-            result["id"] = record.id
-
-        return result
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Gemini response parse error: {e}")
-        raise ValueError(f"Failed to parse AI response: {str(e)}")
+        result = _call_gemini(client, image_bytes, mime_type)
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        raise
+        last_error = e
+        logger.warning(f"Gemini image analysis failed: {e}")
+        try:
+            result = await _analyze_with_openrouter(image_bytes, mime_type)
+        except Exception as e2:
+            raise last_error or e2
+
+    required = ["detected_object", "problem", "confidence", "severity",
+                "repair_difficulty", "estimated_time_minutes",
+                "estimated_price_min", "estimated_price_max",
+                "required_profession", "ai_suggestions"]
+    for key in required:
+        if key not in result:
+            result[key] = None if key != "ai_suggestions" else []
+
+    profession = result.get("required_profession", "")
+    recommended = await _find_recommended_workers(profession) if profession else []
+    result["recommended_workers"] = recommended
+
+    if settings.GEMINI_API_KEY or settings.AI_API_KEY:
+        record = ImageAnalysis(
+            user_id=user_id,
+            image_url="",
+            detected_object=result.get("detected_object"),
+            problem=result.get("problem"),
+            confidence=result.get("confidence"),
+            severity=result.get("severity"),
+            repair_difficulty=result.get("repair_difficulty"),
+            estimated_time_minutes=result.get("estimated_time_minutes"),
+            estimated_price_min=result.get("estimated_price_min"),
+            estimated_price_max=result.get("estimated_price_max"),
+            required_profession=profession,
+            ai_suggestions=result.get("ai_suggestions", []),
+            recommended_workers=recommended,
+            raw_response=result,
+            created_at=datetime.now(timezone.utc),
+        )
+        await record.insert()
+        result["id"] = record.id
+
+    return result
 
 
-def get_analysis_history(db: Session, user_id: str, page: int = 1, limit: int = 20) -> dict:
-    query = db.query(ImageAnalysis).filter(
-        ImageAnalysis.user_id == user_id
-    ).order_by(ImageAnalysis.created_at.desc())
-    total = query.count()
-    items = query.offset((page - 1) * limit).limit(limit).all()
+async def get_analysis_history(user_id: str, page: int = 1, limit: int = 20) -> dict:
+    all_analyses = await ImageAnalysis.find(ImageAnalysis.user_id == user_id).to_list()
+    all_analyses.sort(key=lambda a: a.created_at or datetime.min, reverse=True)
+    total = len(all_analyses)
+    items = all_analyses[(page - 1) * limit: page * limit]
 
     return {
         "data": [
             {
-                "id": a.id,
-                "image_url": a.image_url,
-                "detected_object": a.detected_object,
-                "problem": a.problem,
-                "confidence": a.confidence,
-                "severity": a.severity,
+                "id": a.id, "image_url": a.image_url,
+                "detected_object": a.detected_object, "problem": a.problem,
+                "confidence": a.confidence, "severity": a.severity,
                 "estimated_price_min": a.estimated_price_min,
                 "estimated_price_max": a.estimated_price_max,
                 "required_profession": a.required_profession,
@@ -215,8 +239,6 @@ def get_analysis_history(db: Session, user_id: str, page: int = 1, limit: int = 
             }
             for a in items
         ],
-        "total": total,
-        "page": page,
-        "limit": limit,
+        "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total > 0 else 0,
     }

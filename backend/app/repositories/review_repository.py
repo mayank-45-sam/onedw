@@ -1,48 +1,32 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+"""Async Review repository."""
+from __future__ import annotations
+
+from typing import List, Optional, Tuple
 
 from app.models.review import Review
 from app.repositories.base import BaseRepository
 
 
 class ReviewRepository(BaseRepository[Review]):
-    """Repository for Review model operations."""
+    def __init__(self):
+        super().__init__(Review)
 
-    def __init__(self, db: Session):
-        super().__init__(Review, db)
-
-    def get_by_worker(
-        self, worker_id: str, skip: int = 0, limit: int = 20
-    ) -> tuple[List[Review], int]:
-        query = self.db.query(Review).filter(Review.worker_id == worker_id)
-        total = query.count()
-        items = (
-            query.order_by(Review.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    async def get_by_worker(self, worker_id: str, skip: int = 0, limit: int = 20) -> Tuple[List[Review], int]:
+        total = await Review.find(Review.worker_id == worker_id).count()
+        items = await Review.find(Review.worker_id == worker_id).sort("-created_at").skip(skip).limit(limit).to_list()
         return items, total
 
-    def get_by_booking(self, booking_id: str) -> Optional[Review]:
-        return self.db.query(Review).filter(Review.booking_id == booking_id).first()
+    async def get_by_booking(self, booking_id: str) -> Optional[Review]:
+        return await Review.find_one(Review.booking_id == booking_id)
 
-    def get_by_customer(self, customer_id: str) -> List[Review]:
-        return self.db.query(Review).filter(Review.customer_id == customer_id).all()
+    async def get_by_customer(self, customer_id: str) -> List[Review]:
+        return await Review.find(Review.customer_id == customer_id).to_list()
 
-    def get_worker_average_rating(self, worker_id: str) -> float:
-        result = (
-            self.db.query(func.avg(Review.rating))
-            .filter(Review.worker_id == worker_id)
-            .scalar()
-        )
-        return round(float(result), 2) if result else 0.0
+    async def get_worker_average_rating(self, worker_id: str) -> float:
+        reviews = await Review.find(Review.worker_id == worker_id).to_list()
+        if not reviews:
+            return 0.0
+        return round(sum(r.rating for r in reviews) / len(reviews), 2)
 
-    def get_worker_review_count(self, worker_id: str) -> int:
-        return (
-            self.db.query(func.count(Review.id))
-            .filter(Review.worker_id == worker_id)
-            .scalar()
-            or 0
-        )
+    async def get_worker_review_count(self, worker_id: str) -> int:
+        return await Review.find(Review.worker_id == worker_id).count()

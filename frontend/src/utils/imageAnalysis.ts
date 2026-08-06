@@ -95,7 +95,8 @@ export async function analyzeImage(file: File): Promise<AnalysisResult> {
   }
 
   if (!json.success || !json.data) {
-    return { category: null, confidence: 0, label: 'Analysis failed' };
+    const errMsg = (json as { message?: string })?.message || 'Analysis failed';
+    return { category: null, confidence: 0, label: errMsg };
   }
 
   const { labels, category } = json.data;

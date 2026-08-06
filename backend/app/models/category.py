@@ -1,19 +1,24 @@
+"""Category Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Integer
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import Optional
+
+from beanie import Indexed
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Category(BaseModel):
-    __tablename__ = "categories"
+class Category(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    slug: Indexed(str, unique=True)  # type: ignore[valid-type]
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
+    color: Optional[str] = None
+    service_count: int = 0
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(255), unique=True, nullable=False)
-    slug = Column(String(255), unique=True, nullable=False, index=True)
-    description = Column(String(1000), nullable=True)
-    icon = Column(String(100), nullable=True)
-    image = Column(String(500), nullable=True)
-    color = Column(String(20), nullable=True)
-    service_count = Column(Integer, default=0, nullable=False)
-
-    services = relationship("Service", back_populates="category", cascade="all, delete-orphan")
+    class Settings:
+        name = "categories"

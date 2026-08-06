@@ -1,22 +1,31 @@
+"""Coupon Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime
-from app.models.base import BaseModel
+from datetime import datetime
+from typing import Optional
+
+from beanie import Indexed
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Coupon(BaseModel):
-    __tablename__ = "coupons"
+class Coupon(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    code: Indexed(str, unique=True)  # type: ignore[valid-type]
+    title: str
+    description: Optional[str] = None
+    type: str
+    value: float
+    max_discount: Optional[float] = None
+    min_order: Optional[float] = None
+    valid_from: datetime
+    valid_until: datetime
+    usage_limit: Optional[int] = None
+    used_count: int = 0
+    is_active: bool = True
+    image: Optional[str] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    code = Column(String(50), unique=True, nullable=False, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(String(1000), nullable=True)
-    type = Column(String(10), nullable=False)
-    value = Column(Float, nullable=False)
-    max_discount = Column(Float, nullable=True)
-    min_order = Column(Float, nullable=True)
-    valid_from = Column(DateTime(timezone=True), nullable=False)
-    valid_until = Column(DateTime(timezone=True), nullable=False)
-    usage_limit = Column(Integer, nullable=True)
-    used_count = Column(Integer, default=0, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    image = Column(String(500), nullable=True)
+    class Settings:
+        name = "coupons"

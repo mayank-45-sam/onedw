@@ -1,48 +1,50 @@
+"""Fraud-related Beanie documents."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, ForeignKey, JSON, Text
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import Any, Dict, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class WorkerFraudData(BaseModel):
-    __tablename__ = "worker_fraud_data"
+class WorkerFraudData(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    fraud_score: float = 0.0
+    is_disabled: bool = False
+    risk_level: str = "low"
+    last_analysis_at: Optional[str] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    fraud_score = Column(Float, default=0.0, nullable=False)
-    is_disabled = Column(Boolean, default=False, nullable=False)
-    risk_level = Column(String(20), default="low", nullable=False)
-    last_analysis_at = Column(String(30), nullable=True)
-
-    worker = relationship("Worker", backref="fraud_data", uselist=False)
-
-
-class FraudReport(BaseModel):
-    __tablename__ = "fraud_reports"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    fraud_score = Column(Float, nullable=False)
-    risk_level = Column(String(20), nullable=False)
-    reason = Column(Text, nullable=True)
-    confidence = Column(Float, nullable=True)
-    recommendation = Column(String(500), nullable=True)
-    analysis_details = Column(JSON, default=dict, nullable=True)
-    triggered_by = Column(String(50), nullable=True)
-    analyzed_at = Column(String(30), nullable=False)
-
-    worker = relationship("Worker", backref="fraud_reports")
+    class Settings:
+        name = "worker_fraud_data"
 
 
-class SuspiciousActivity(BaseModel):
-    __tablename__ = "suspicious_activities"
+class FraudReport(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    fraud_score: float
+    risk_level: str
+    reason: Optional[str] = None
+    confidence: Optional[float] = None
+    recommendation: Optional[str] = None
+    analysis_details: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    triggered_by: Optional[str] = None
+    analyzed_at: str
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    activity_type = Column(String(50), nullable=False)
-    description = Column(String(1000), nullable=True)
-    severity = Column(String(20), default="low", nullable=False)
-    metadata_json = Column(JSON, default=dict, nullable=True)
-    detected_at = Column(String(30), nullable=False)
+    class Settings:
+        name = "fraud_reports"
 
-    worker = relationship("Worker", backref="suspicious_activities")
+
+class SuspiciousActivity(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    activity_type: str
+    description: Optional[str] = None
+    severity: str = "low"
+    metadata_json: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    detected_at: str
+
+    class Settings:
+        name = "suspicious_activities"

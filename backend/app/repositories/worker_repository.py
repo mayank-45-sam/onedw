@@ -1,19 +1,18 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func, or_
+"""Async Worker repository."""
+from __future__ import annotations
 
-from app.models.category import Category
+import re
+from typing import Dict, List, Optional, Tuple
+
 from app.models.worker import Worker
 from app.repositories.base import BaseRepository
 
 
 class WorkerRepository(BaseRepository[Worker]):
-    """Repository for Worker model operations."""
+    def __init__(self):
+        super().__init__(Worker)
 
-    def __init__(self, db: Session):
-        super().__init__(Worker, db)
-
-    def search(
+    async def search(
         self,
         skip: int = 0,
         limit: int = 20,
@@ -25,72 +24,53 @@ class WorkerRepository(BaseRepository[Worker]):
         min_price: Optional[float] = None,
         is_online: Optional[bool] = None,
         sort_by: Optional[str] = None,
-    ) -> tuple[List[Worker], int]:
-        query = self.db.query(Worker)
-
+    ) -> Tuple[List[Worker], int]:
+        conditions = []
         if category_id:
-            query = query.filter(Worker.category_ids.contains(category_id))
+            conditions.append({"category_ids": category_id})
         if search:
-            term = f"%{search.strip()}%"
-            filters = [
-                Worker.name.ilike(term),
-                Worker.profession.ilike(term),
-                Worker.bio.ilike(term),
-            ]
-            matching_cat_ids = [
-                cid for (cid,) in self.db.query(Category.id).filter(
-                    or_(Category.name.ilike(term), Category.slug.ilike(term))
-                ).all()
-            ]
-            if matching_cat_ids:
-                filters.append(or_(*[Worker.category_ids.contains(cid) for cid in matching_cat_ids]))
-            query = query.filter(or_(*filters))
+            term = re.compile(search.strip(), re.IGNORECASE)
+            conditions.append({
+                "$or": [
+                    {"name": term},
+                    {"profession": term},
+                    {"bio": term},
+                ]
+            })
         if min_rating is not None:
-            query = query.filter(Worker.rating >= min_rating)
+            conditions.append({"rating": {"$gte": min_rating}})
         if min_experience is not None:
-            query = query.filter(Worker.experience_years >= min_experience)
+            conditions.append({"experience_years": {"$gte": min_experience}})
         if max_price is not None:
-            query = query.filter(Worker.hourly_rate <= max_price)
+            conditions.append({"hourly_rate": {"$lte": max_price}})
         if min_price is not None:
-            query = query.filter(Worker.hourly_rate >= min_price)
+            conditions.append({"hourly_rate": {"$gte": min_price}})
         if is_online is not None:
-            query = query.filter(Worker.is_online == is_online)
+            conditions.append({"is_online": is_online})
 
-        total = query.count()
+        mongo_filter = {"$and": conditions} if conditions else {}
 
+        sort_field = "-rating"
         if sort_by == "rating":
-            query = query.order_by(Worker.rating.desc())
+            sort_field = "-rating"
         elif sort_by == "price_asc":
-            query = query.order_by(Worker.hourly_rate.asc())
+            sort_field = "+hourly_rate"
         elif sort_by == "price_desc":
-            query = query.order_by(Worker.hourly_rate.desc())
+            sort_field = "-hourly_rate"
         elif sort_by == "experience":
-            query = query.order_by(Worker.experience_years.desc())
+            sort_field = "-experience_years"
         elif sort_by == "jobs":
-            query = query.order_by(Worker.completed_jobs.desc())
-        else:
-            query = query.order_by(Worker.rating.desc(), Worker.completed_jobs.desc())
+            sort_field = "-completed_jobs"
 
-        items = query.offset(skip).limit(limit).all()
+        total = await Worker.find(mongo_filter).count()
+        items = await Worker.find(mongo_filter).sort(sort_field).skip(skip).limit(limit).to_list()
         return items, total
 
-    def get_with_details(self, worker_id: str) -> Optional[Worker]:
-        return (
-            self.db.query(Worker)
-            .options(
-                selectinload(Worker.skills),
-                selectinload(Worker.languages),
-                selectinload(Worker.availability),
-            )
-            .filter(Worker.id == worker_id)
-            .first()
-        )
+    async def get_by_user_id(self, user_id: str) -> Optional[Worker]:
+        return await Worker.find_one(Worker.user_id == user_id)
 
-    def get_by_user_id(self, user_id: str) -> Optional[Worker]:
-        return self.db.query(Worker).filter(Worker.user_id == user_id).first()
-
-    def get_aadhaar_status(self, worker_id: str) -> Optional[dict]:
-        worker = self.db.query(Worker).filter(Worker.id == worker_id).first()
+    async def get_aadhaar_status(self, worker_id: str) -> Optional[Dict]:
+        worker = await self.get(worker_id)
         if worker is None:
             return None
         return {

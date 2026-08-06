@@ -1,12 +1,9 @@
 from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
-from sqlalchemy.orm import Session
 from loguru import logger
 
-from app.db.database import get_db
 from app.dependencies.auth import get_current_user, get_optional_user
 from app.models.user import User
 from app.services.image_analysis_service import analyze_image, get_analysis_history
-from app.utils.file_upload import save_file
 
 router = APIRouter(prefix="/ai/image-analysis", tags=["AI Image Analysis"])
 
@@ -15,7 +12,6 @@ router = APIRouter(prefix="/ai/image-analysis", tags=["AI Image Analysis"])
 async def analyze_repair_image(
     file: UploadFile = File(...),
     current_user: User = Depends(get_optional_user),
-    db: Session = Depends(get_db),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -26,7 +22,6 @@ async def analyze_repair_image(
 
     try:
         result = await analyze_image(
-            db=db,
             image_bytes=contents,
             mime_type=file.content_type,
             user_id=current_user.id if current_user else None,
@@ -47,10 +42,9 @@ async def analyze_repair_image(
 
 
 @router.get("/history", summary="Get image analysis history")
-def analysis_history(
+async def analysis_history(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=50),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    return get_analysis_history(db, current_user.id, page, limit)
+    return await get_analysis_history(current_user.id, page, limit)

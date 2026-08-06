@@ -1,6 +1,9 @@
-from typing import Optional
-from sqlalchemy.orm import Session
+"""Async Service service — Beanie version."""
+from __future__ import annotations
 
+from typing import Optional
+
+from app.models.category import Category
 from app.repositories.service_repository import ServiceRepository
 from app.core.exceptions import NotFoundException
 
@@ -8,11 +11,10 @@ from app.core.exceptions import NotFoundException
 class ServiceService:
     """Service for service listing operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
-        self.repo = ServiceRepository(db)
+    def __init__(self):
+        self.repo = ServiceRepository()
 
-    def list_services(
+    async def list_services(
         self,
         page: int = 1,
         limit: int = 20,
@@ -24,7 +26,7 @@ class ServiceService:
         sort_by: Optional[str] = None,
     ) -> dict:
         skip = (page - 1) * limit
-        items, total = self.repo.search(
+        items, total = await self.repo.search(
             skip=skip,
             limit=limit,
             category_id=category_id,
@@ -36,49 +38,52 @@ class ServiceService:
         )
         pages = (total + limit - 1) // limit if limit > 0 else 0
 
+        serialized = []
+        for s in items:
+            cat = await Category.find_one(Category.id == s.category_id) if s.category_id else None
+            serialized.append(self._serialize(s, cat))
+
         return {
-            "data": [self._serialize(s) for s in items],
+            "data": serialized,
             "total": total,
             "page": page,
             "limit": limit,
             "pages": pages,
         }
 
-    def get_service(self, service_id: str) -> dict:
-        service = self.repo.get(service_id)
+    async def get_service(self, service_id: str) -> dict:
+        service = await self.repo.get(service_id)
         if service is None:
             raise NotFoundException(message="Service not found")
-        return self._serialize_detail(service)
+        cat = await Category.find_one(Category.id == service.category_id) if service.category_id else None
+        return self._serialize(service, cat)
 
-    def list_by_category(
-        self, category_id: str, page: int = 1, limit: int = 20
-    ) -> dict:
+    async def list_by_category(self, category_id: str, page: int = 1, limit: int = 20) -> dict:
         skip = (page - 1) * limit
-        items, total = self.repo.get_by_category(
-            category_id=category_id, skip=skip, limit=limit
-        )
+        items, total = await self.repo.get_by_category(category_id=category_id, skip=skip, limit=limit)
         pages = (total + limit - 1) // limit if limit > 0 else 0
+        cat = await Category.find_one(Category.id == category_id) if category_id else None
 
         return {
-            "data": [self._serialize(s) for s in items],
+            "data": [self._serialize(s, cat) for s in items],
             "total": total,
             "page": page,
             "limit": limit,
             "pages": pages,
         }
 
-    def _serialize(self, service) -> dict:
+    def _serialize(self, service, category=None) -> dict:
         cat_data = None
-        if service.category:
+        if category:
             cat_data = {
-                "id": service.category.id,
-                "name": service.category.name,
-                "slug": service.category.slug,
-                "description": service.category.description,
-                "icon": service.category.icon,
-                "image": service.category.image,
-                "color": service.category.color,
-                "service_count": service.category.service_count,
+                "id": category.id,
+                "name": category.name,
+                "slug": category.slug,
+                "description": category.description,
+                "icon": category.icon,
+                "image": category.image,
+                "color": category.color,
+                "service_count": category.service_count,
             }
 
         return {
@@ -98,8 +103,3 @@ class ServiceService:
             "tags": service.tags,
             "category": cat_data,
         }
-
-    def _serialize_detail(self, service) -> dict:
-        data = self._serialize(service)
-        data["bookings_count"] = len(service.bookings) if service.bookings else 0
-        return data

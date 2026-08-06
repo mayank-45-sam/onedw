@@ -1,16 +1,20 @@
+"""Admin profile Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Admin(BaseModel):
-    __tablename__ = "admins"
+class Admin(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    avatar: Optional[str] = None
+    permissions: List[str] = Field(default_factory=list)
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    avatar = Column(String(500), nullable=True)
-    permissions = Column(JSON, default=list, nullable=True)
-
-    user = relationship("User", back_populates="admin_profile")
+    class Settings:
+        name = "admins"

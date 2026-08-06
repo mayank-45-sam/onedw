@@ -1,7 +1,7 @@
 """
 Unified startup seed — called automatically when the server starts.
 
-Creates tables (init_db) and populates:
+Populates:
   - 25 categories with Unsplash images
   - ~140 services with Unsplash images
   - Demo users (customers, workers, admin)
@@ -17,7 +17,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from app.db.database import init_db, SessionLocal
 from app.core.config import settings
 
 _U = "https://images.unsplash.com"
@@ -198,12 +197,13 @@ SERVICE_IMAGE_MAP = {
 }
 
 
-def _seed_categories_and_services(db) -> tuple[int, int]:
+async def _seed_categories_and_services() -> tuple[int, int]:
     """Seed 25 categories and ~140 services. Returns (cats_added, svcs_added)."""
     from app.models.category import Category
     from app.models.service import Service
 
-    existing_slugs = {row[0] for row in db.query(Category.slug).all()}
+    existing_cats = await Category.find_all().to_list()
+    existing_slugs = {c.slug for c in existing_cats}
     added_cats = 0
     added_svcs = 0
 
@@ -605,7 +605,7 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
 
     for name, slug, icon, color, desc, services in CATEGORIES:
         if slug in existing_slugs:
-            cat = db.query(Category).filter(Category.slug == slug).first()
+            cat = await Category.find_one(Category.slug == slug)
         else:
             cat = Category(
                 id=str(uuid.uuid4()),
@@ -617,13 +617,11 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
                 image=CATEGORY_IMAGES.get(slug),
                 service_count=0,
             )
-            db.add(cat)
-            db.flush()
+            await cat.insert()
             added_cats += 1
 
-        existing_svc_slugs = {
-            s[0] for s in db.query(Service.slug).filter(Service.category_id == cat.id).all()
-        }
+        existing_svcs = await Service.find(Service.category_id == cat.id).to_list()
+        existing_svc_slugs = {s.slug for s in existing_svcs}
 
         svc_count = 0
         imgs = SVC_IMAGES.get(slug, SVC_IMAGES["default"])
@@ -633,7 +631,7 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
             if svc_slug in existing_svc_slugs:
                 continue
 
-            db.add(Service(
+            await Service(
                 id=str(uuid.uuid4()),
                 name=svc_name,
                 slug=svc_slug,
@@ -647,31 +645,33 @@ def _seed_categories_and_services(db) -> tuple[int, int]:
                 popular=popular,
                 trending=trending,
                 tags=tags,
-            ))
+            ).insert()
             svc_count += 1
 
-        cat.service_count = db.query(Service).filter(Service.category_id == cat.id).count()
+        cat.service_count = await Service.find(Service.category_id == cat.id).count()
+        await cat.save()
         added_svcs += svc_count
 
     # Backfill any services missing images
     for name, slug, *_rest in [(c[0], c[1]) for c in CATEGORIES]:
-        cat = db.query(Category).filter(Category.slug == slug).first()
+        cat = await Category.find_one(Category.slug == slug)
         if not cat:
             continue
-        null_svcs = db.query(Service).filter(Service.category_id == cat.id, Service.image.is_(None)).all()
+        null_svcs = await Service.find(Service.category_id == cat.id, Service.image == None).to_list()
         imgs = SVC_IMAGES.get(slug, SVC_IMAGES["default"])
         for idx, svc in enumerate(null_svcs):
             svc.image = SERVICE_IMAGE_MAP.get(svc.name, imgs[idx % len(imgs)])
+            await svc.save()
 
-    all_cats = db.query(Category).all()
+    all_cats = await Category.find_all().to_list()
     for cat in all_cats:
-        cat.service_count = db.query(Service).filter(Service.category_id == cat.id).count()
+        cat.service_count = await Service.find(Service.category_id == cat.id).count()
+        await cat.save()
 
-    db.commit()
     return added_cats, added_svcs
 
 
-def _seed_demo_data(db) -> dict:
+async def _seed_demo_data() -> dict:
     """Seed demo users, workers, bookings, and coupons. Returns summary dict."""
     from app.models.user import User, UserRole
     from app.models.customer import Customer
@@ -687,10 +687,10 @@ def _seed_demo_data(db) -> dict:
     counts = {"users": 0, "workers": 0, "bookings": 0, "coupons": 0}
 
     # Check if demo data already exists
-    if db.query(Category).filter(Category.slug == "plumbing").first() is None:
+    if await Category.find_one(Category.slug == "plumbing") is None:
         return counts
 
-    if db.query(User).filter(User.email == "alice@demo.com").first():
+    if await User.find_one(User.email == "alice@demo.com"):
         return counts  # Demo data already seeded
 
     pw = get_password_hash("password123")
@@ -700,13 +700,11 @@ def _seed_demo_data(db) -> dict:
     customers = []
     for email, name in [("alice@demo.com", "Alice Johnson"), ("bob@demo.com", "Bob Williams")]:
         u = User(email=email, phone=None, password_hash=pw, role=UserRole.CUSTOMER, is_active=True, is_verified=True)
-        db.add(u)
-        db.flush()
+        await u.insert()
         c = Customer(user_id=u.id, name=name, address={"city": "Bangalore", "state": "Karnataka"})
-        db.add(c)
-        db.flush()
+        await c.insert()
         customers.append(c)
-        db.add(Wallet(user_id=u.id))
+        await Wallet(user_id=u.id).insert()
         counts["users"] += 1
 
     # Workers — ~4 demo workers per category so every category search returns pros
@@ -849,7 +847,7 @@ def _seed_demo_data(db) -> dict:
 
     cats = {}
     for slug in all_cat_slugs:
-        c = db.query(Category).filter(Category.slug == slug).first()
+        c = await Category.find_one(Category.slug == slug)
         if c:
             cats[slug] = c
 
@@ -863,8 +861,7 @@ def _seed_demo_data(db) -> dict:
             is_active=True,
             is_verified=True,
         )
-        db.add(u)
-        db.flush()
+        await u.insert()
         cat_id = cats[cat_slug].id if cat_slug in cats else None
         w = Worker(
             user_id=u.id,
@@ -879,17 +876,15 @@ def _seed_demo_data(db) -> dict:
             is_online=True,
             category_ids=[cat_id] if cat_id else [],
         )
-        db.add(w)
-        db.flush()
-        loc = WorkerLocation(worker_id=w.id, latitude=lat, longitude=lng)
-        db.add(loc)
+        await w.insert()
+        await WorkerLocation(worker_id=w.id, latitude=lat, longitude=lng).insert()
         workers.append(w)
-        db.add(Wallet(user_id=u.id))
+        await Wallet(user_id=u.id).insert()
         counts["workers"] += 1
         counts["users"] += 1
 
     if counts.get("workers", 0) > 0:
-        _seed_fraud_data(db)
+        await _seed_fraud_data()
 
     # Admin user
     admin_user = User(
@@ -900,17 +895,16 @@ def _seed_demo_data(db) -> dict:
         is_active=True,
         is_verified=True,
     )
-    db.add(admin_user)
-    db.flush()
+    await admin_user.insert()
     from app.models.admin import Admin
-    db.add(Admin(user_id=admin_user.id, name="Admin User"))
-    db.add(Wallet(user_id=admin_user.id))
+    await Admin(user_id=admin_user.id, name="Admin User").insert()
+    await Wallet(user_id=admin_user.id).insert()
     counts["users"] += 1
 
     # Bookings
     svcs = {}
     for slug_part in ["pipe-repair-plumbing", "switch-board-repair-electrical", "deep-home-cleaning-cleaning", "ac-servicing-ac-repair"]:
-        svc = db.query(Service).filter(Service.slug == slug_part).first()
+        svc = await Service.find_one(Service.slug == slug_part)
         if svc:
             svcs[slug_part] = svc
 
@@ -938,7 +932,7 @@ def _seed_demo_data(db) -> dict:
             eta_minutes=15,
             distance_km=2.3,
         )
-        db.add(b1)
+        await b1.insert()
         counts["bookings"] += 1
 
     if svcs.get("switch-fix-electrical") and len(customers) >= 2 and len(workers) >= 2:
@@ -957,31 +951,30 @@ def _seed_demo_data(db) -> dict:
             price=399,
             final_price=399,
         )
-        db.add(b2)
+        await b2.insert()
         counts["bookings"] += 1
 
     # Coupons
-    if not db.query(Coupon).filter(Coupon.code == "SAVE10").first():
-        db.add(Coupon(
+    if not await Coupon.find_one(Coupon.code == "SAVE10"):
+        await Coupon(
             code="SAVE10", title="Save 10%", description="10% off on any service",
             type="percent", value=10.0, max_discount=20.0, min_order=25.0,
             valid_from=now, valid_until=now + timedelta(days=90),
             usage_limit=100, is_active=True,
-        ))
-        db.add(Coupon(
+        ).insert()
+        await Coupon(
             code="NEWUSER", title="New User 15%", description="15% off for first booking",
             type="percent", value=15.0, max_discount=30.0, min_order=20.0,
             valid_from=now, valid_until=now + timedelta(days=180),
             usage_limit=500, is_active=True,
-        ))
+        ).insert()
         counts["coupons"] = 2
 
-    db.commit()
     return counts
 
 
-def _seed_fraud_data(db):
-    """Seed fraud data for demo workers (trust scores: 98, 90, 78, 38)."""
+async def _seed_fraud_data():
+    """Seed fraud data for demo workers."""
     from app.models.worker import Worker
     from app.models.fraud import WorkerFraudData, FraudReport, SuspiciousActivity
 
@@ -998,98 +991,83 @@ def _seed_fraud_data(db):
     ]
     added = 0
     for wname, score, risk, activities in configs:
-        worker = db.query(Worker).filter(Worker.name == wname).first()
+        worker = await Worker.find_one(Worker.name == wname)
         if not worker:
             continue
-        existing_fd = db.query(WorkerFraudData).filter(WorkerFraudData.worker_id == worker.id).first()
+        existing_fd = await WorkerFraudData.find_one(WorkerFraudData.worker_id == worker.id)
         if existing_fd:
             existing_fd.fraud_score = score
             existing_fd.risk_level = risk
             existing_fd.is_disabled = False
             existing_fd.last_analysis_at = now_iso
-            db.add(existing_fd)
+            await existing_fd.save()
         else:
-            db.add(WorkerFraudData(
+            await WorkerFraudData(
                 id=str(uuid.uuid4()), worker_id=worker.id,
                 fraud_score=score, is_disabled=False, risk_level=risk, last_analysis_at=now_iso,
-            ))
-        existing_report = db.query(FraudReport).filter(FraudReport.worker_id == worker.id).first()
+            ).insert()
+        existing_report = await FraudReport.find_one(FraudReport.worker_id == worker.id)
         if existing_report:
             existing_report.fraud_score = score
             existing_report.risk_level = risk
             existing_report.analyzed_at = now_iso
-            db.add(existing_report)
+            await existing_report.save()
         else:
-            db.add(FraudReport(
+            await FraudReport(
                 id=str(uuid.uuid4()), worker_id=worker.id, fraud_score=score, risk_level=risk,
                 reason="Heuristic analysis: high cancellation rate, complaint count, and duplicate phone.",
                 confidence=max(60.0, 100.0 - score),
                 recommendation="no_action" if score < 30 else "warn",
                 triggered_by="seed", analyzed_at=now_iso,
-            ))
-        db.query(SuspiciousActivity).filter(SuspiciousActivity.worker_id == worker.id).delete()
+            ).insert()
+        old_acts = await SuspiciousActivity.find(SuspiciousActivity.worker_id == worker.id).to_list()
+        for oa in old_acts:
+            await oa.delete()
         for act in activities:
-            db.add(SuspiciousActivity(
+            await SuspiciousActivity(
                 id=str(uuid.uuid4()), worker_id=worker.id,
                 activity_type=act["type"], description=act["desc"],
                 severity=act["sev"], metadata_json=act["meta"], detected_at=now_iso,
-            ))
+            ).insert()
         added += 1
     if added:
         logger.info(f"Fraud data seeded for {added} workers")
 
 
-def run_startup_seed():
+async def run_startup_seed():
     """
     Main entry point — called from main.py lifespan.
-    Creates tables and ensures all data is populated.
+    Ensures all data is populated in MongoDB.
     """
     logger.info("Running startup seed...")
 
     # 1. Ensure upload directories exist
     _ensure_upload_dirs()
 
-    # 2. Create all tables
-    init_db()
-    logger.info("Database tables created/verified")
-
-    # 3. Seed categories and services
-    db = SessionLocal()
+    # 2. Seed categories and services
     try:
-        cats_added, svcs_added = _seed_categories_and_services(db)
+        cats_added, svcs_added = await _seed_categories_and_services()
         if cats_added or svcs_added:
             logger.info(f"Seed: {cats_added} categories, {svcs_added} services added")
         else:
             logger.info("Categories and services already populated")
     except Exception as e:
         logger.error(f"Category/service seed error: {e}")
-        db.rollback()
-    finally:
-        db.close()
 
-    # 4. Seed demo data
-    db = SessionLocal()
+    # 3. Seed demo data
     try:
         from app.models.category import Category
-        cat_count = db.query(Category).count()
+        cat_count = await Category.find_all().count()
         if cat_count > 0:
-            counts = _seed_demo_data(db)
+            counts = await _seed_demo_data()
             if any(v > 0 for v in counts.values()):
                 logger.info(f"Demo seed: {counts}")
             else:
                 logger.info("Demo data already populated")
-            _seed_fraud_data(db)
-            db.commit()
+            await _seed_fraud_data()
         else:
             logger.warning("No categories found — skipping demo seed")
     except Exception as e:
         logger.error(f"Demo seed error: {e}")
-        db.rollback()
-    finally:
-        db.close()
 
     logger.info("Startup seed complete")
-
-
-if __name__ == "__main__":
-    run_startup_seed()

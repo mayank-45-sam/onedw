@@ -1,8 +1,14 @@
-import uuid
-from sqlalchemy import Column, String, Boolean, Enum as SAEnum
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+"""User Beanie document."""
+from __future__ import annotations
+
 import enum
+import uuid
+from typing import Optional
+
+from beanie import Indexed
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
 class UserRole(str, enum.Enum):
@@ -11,19 +17,14 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
 
 
-class User(BaseModel):
-    __tablename__ = "users"
+class User(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: Indexed(str, unique=True)  # type: ignore[valid-type]
+    phone: Optional[Indexed(str, unique=True)] = None  # type: ignore[valid-type]
+    password_hash: str
+    role: UserRole = UserRole.CUSTOMER
+    is_active: bool = True
+    is_verified: bool = False
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    phone = Column(String(20), unique=True, nullable=True, index=True)
-    password_hash = Column(String(255), nullable=False)
-    role = Column(SAEnum(UserRole, name="user_role", create_constraint=True), nullable=False, default=UserRole.CUSTOMER)
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_verified = Column(Boolean, default=False, nullable=False)
-
-    customer_profile = relationship("Customer", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    worker_profile = relationship("Worker", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    admin_profile = relationship("Admin", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    wallet = relationship("Wallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    class Settings:
+        name = "users"

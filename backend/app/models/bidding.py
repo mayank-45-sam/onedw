@@ -1,8 +1,13 @@
-import uuid
+"""Bidding / custom job Beanie documents."""
+from __future__ import annotations
+
 import enum
-from sqlalchemy import Column, String, Text, Float, Integer, Enum as SAEnum, ForeignKey
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+import uuid
+from typing import Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
 class CustomJobStatus(str, enum.Enum):
@@ -19,61 +24,43 @@ class BidStatus(str, enum.Enum):
     COUNTERED = "countered"
 
 
-class CustomJob(BaseModel):
-    __tablename__ = "custom_jobs"
+class CustomJob(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    category_id: Optional[str] = None
+    title: str
+    description: str
+    budget_min: float
+    budget_max: float
+    urgency: Optional[str] = None
+    preferred_time: Optional[str] = None
+    images: Optional[str] = None
+    status: CustomJobStatus = CustomJobStatus.OPEN
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    category_id = Column(String(36), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    budget_min = Column(Float, nullable=False)
-    budget_max = Column(Float, nullable=False)
-    urgency = Column(String(30), nullable=True)
-    preferred_time = Column(String(100), nullable=True)
-    images = Column(Text, nullable=True)
-    status = Column(
-        SAEnum(CustomJobStatus, name="custom_job_status", create_constraint=True),
-        nullable=False,
-        default=CustomJobStatus.OPEN,
-    )
-
-    category = relationship("Category", backref="custom_jobs")
-    bids = relationship("JobBid", back_populates="job", cascade="all, delete-orphan")
-    negotiation_messages = relationship(
-        "NegotiationMessage", back_populates="job", cascade="all, delete-orphan"
-    )
+    class Settings:
+        name = "custom_jobs"
 
 
-class JobBid(BaseModel):
-    __tablename__ = "job_bids"
+class JobBid(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    worker_id: str
+    bid_amount: float
+    message: Optional[str] = None
+    estimated_time: Optional[str] = None
+    status: BidStatus = BidStatus.PENDING
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    job_id = Column(String(36), ForeignKey("custom_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    bid_amount = Column(Float, nullable=False)
-    message = Column(Text, nullable=True)
-    estimated_time = Column(String(100), nullable=True)
-    status = Column(
-        SAEnum(BidStatus, name="bid_status", create_constraint=True),
-        nullable=False,
-        default=BidStatus.PENDING,
-    )
-
-    job = relationship("CustomJob", back_populates="bids")
-    worker = relationship("Worker", backref="job_bids")
+    class Settings:
+        name = "job_bids"
 
 
-class NegotiationMessage(BaseModel):
-    __tablename__ = "negotiation_messages"
+class NegotiationMessage(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    sender_id: str
+    receiver_id: Optional[str] = None
+    message: Optional[str] = None
+    proposed_price: Optional[float] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    job_id = Column(String(36), ForeignKey("custom_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    receiver_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
-    message = Column(Text, nullable=True)
-    proposed_price = Column(Float, nullable=True)
-
-    job = relationship("CustomJob", back_populates="negotiation_messages")
-    sender = relationship("User", foreign_keys=[sender_id], backref="sent_negotiation_messages")
-    receiver = relationship("User", foreign_keys=[receiver_id], backref="received_negotiation_messages")
+    class Settings:
+        name = "negotiation_messages"

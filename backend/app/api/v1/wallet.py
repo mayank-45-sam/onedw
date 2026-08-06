@@ -1,15 +1,18 @@
+"""Wallet API — async Beanie version."""
+from __future__ import annotations
+
 from typing import Optional
+from datetime import datetime, timezone
+
 from pydantic import Field
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 
-from app.db.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.models.wallet_transaction import WalletTransaction, TransactionType, TransactionStatus
 from app.schemas.common import SchemaBase
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import BadRequestException
 
 router = APIRouter(prefix="/wallet", tags=["Wallet"])
 
@@ -25,135 +28,94 @@ class AddFundsRequest(SchemaBase):
 
 def _serialize_transaction(t: WalletTransaction) -> dict:
     return {
-        "id": t.id,
-        "wallet_id": t.wallet_id,
-        "user_id": t.user_id,
+        "id": t.id, "wallet_id": t.wallet_id, "user_id": t.user_id,
         "type": t.type.value if t.type else "credit",
-        "amount": t.amount,
-        "currency": t.currency,
+        "amount": t.amount, "currency": getattr(t, "currency", "INR"),
         "status": t.status.value if t.status else "completed",
-        "description": t.description,
-        "booking_id": t.booking_id,
-        "reference": t.reference,
+        "description": t.description, "booking_id": getattr(t, "booking_id", None),
+        "reference": getattr(t, "reference", None),
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }
 
 
 def _serialize_wallet(w: Wallet) -> dict:
     return {
-        "id": w.id,
-        "user_id": w.user_id,
-        "balance": w.balance,
-        "currency": w.currency,
-        "pending_balance": w.pending_balance,
-        "total_earnings": w.total_earnings,
-        "total_spent": w.total_spent,
+        "id": w.id, "user_id": w.user_id, "balance": w.balance,
+        "currency": getattr(w, "currency", "INR"),
+        "pending_balance": getattr(w, "pending_balance", 0.0),
+        "total_earnings": getattr(w, "total_earnings", 0.0),
+        "total_spent": getattr(w, "total_spent", 0.0),
         "created_at": w.created_at.isoformat() if w.created_at else None,
         "updated_at": w.updated_at.isoformat() if w.updated_at else None,
     }
 
 
-def _get_or_create_wallet(db: Session, user_id: str) -> Wallet:
-    wallet = db.query(Wallet).filter(Wallet.user_id == user_id).first()
+async def _get_or_create_wallet(user_id: str) -> Wallet:
+    wallet = await Wallet.find_one(Wallet.user_id == user_id)
     if wallet is None:
-        wallet = Wallet(user_id=user_id)
-        db.add(wallet)
-        db.commit()
-        db.refresh(wallet)
+        wallet = Wallet(user_id=user_id, balance=0.0)
+        await wallet.insert()
     return wallet
 
 
 @router.get("", summary="Get wallet details")
-def get_wallet(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    wallet = _get_or_create_wallet(db, current_user.id)
-    return {
-        "success": True,
-        "message": "Wallet retrieved successfully",
-        "data": _serialize_wallet(wallet),
-    }
+async def get_wallet(current_user: User = Depends(get_current_user)):
+    wallet = await _get_or_create_wallet(current_user.id)
+    return {"success": True, "message": "Wallet retrieved successfully", "data": _serialize_wallet(wallet)}
 
 
 @router.get("/transactions", summary="Get wallet transactions")
-def get_transactions(
+async def get_transactions(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     type: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    wallet = _get_or_create_wallet(db, current_user.id)
-    query = db.query(WalletTransaction).filter(WalletTransaction.wallet_id == wallet.id)
+    wallet = await _get_or_create_wallet(current_user.id)
+    all_txns = await WalletTransaction.find(WalletTransaction.wallet_id == wallet.id).to_list()
     if type in ("credit", "debit"):
-        query = query.filter(WalletTransaction.type == TransactionType(type))
-    query = query.order_by(WalletTransaction.created_at.desc())
-    total = query.count()
-    items = query.offset((page - 1) * limit).limit(limit).all()
+        all_txns = [t for t in all_txns if (t.type.value if t.type else "") == type]
+    all_txns.sort(key=lambda t: t.created_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    total = len(all_txns)
+    items = all_txns[(page - 1) * limit: page * limit]
     return {
-        "success": True,
-        "message": "Transactions retrieved successfully",
+        "success": True, "message": "Transactions retrieved successfully",
         "data": [_serialize_transaction(t) for t in items],
-        "total": total,
-        "page": page,
-        "limit": limit,
+        "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total > 0 else 0,
     }
 
 
 @router.post("/withdraw", summary="Withdraw from wallet")
-def withdraw(
-    body: WithdrawRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    wallet = _get_or_create_wallet(db, current_user.id)
-    if wallet.balance < body.amount:
+async def withdraw(body: WithdrawRequest, current_user: User = Depends(get_current_user)):
+    wallet = await _get_or_create_wallet(current_user.id)
+    if (wallet.balance or 0) < body.amount:
         raise BadRequestException(message="Insufficient balance")
-    wallet.balance -= body.amount
-    wallet.total_spent += body.amount
+    wallet.balance = (wallet.balance or 0) - body.amount
+    wallet.total_spent = (getattr(wallet, "total_spent", 0) or 0) + body.amount
+    await wallet.save()
     txn = WalletTransaction(
-        wallet_id=wallet.id,
-        user_id=current_user.id,
-        type=TransactionType.DEBIT,
-        amount=body.amount,
-        currency=wallet.currency,
+        wallet_id=wallet.id, user_id=current_user.id,
+        type=TransactionType.DEBIT, amount=body.amount,
+        currency=getattr(wallet, "currency", "INR"),
         status=TransactionStatus.COMPLETED,
         description=f"Withdrawal via {body.method}",
     )
-    db.add(txn)
-    db.commit()
-    return {
-        "success": True,
-        "message": "Withdrawal successful",
-        "data": None,
-    }
+    await txn.insert()
+    return {"success": True, "message": "Withdrawal successful", "data": None}
 
 
 @router.post("/add", summary="Add funds to wallet")
-def add_funds(
-    body: AddFundsRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    wallet = _get_or_create_wallet(db, current_user.id)
-    wallet.balance += body.amount
-    wallet.total_earnings += body.amount
+async def add_funds(body: AddFundsRequest, current_user: User = Depends(get_current_user)):
+    wallet = await _get_or_create_wallet(current_user.id)
+    wallet.balance = (wallet.balance or 0) + body.amount
+    wallet.total_earnings = (getattr(wallet, "total_earnings", 0) or 0) + body.amount
+    await wallet.save()
     txn = WalletTransaction(
-        wallet_id=wallet.id,
-        user_id=current_user.id,
-        type=TransactionType.CREDIT,
-        amount=body.amount,
-        currency=wallet.currency,
-        status=TransactionStatus.COMPLETED,
-        description="Funds added",
+        wallet_id=wallet.id, user_id=current_user.id,
+        type=TransactionType.CREDIT, amount=body.amount,
+        currency=getattr(wallet, "currency", "INR"),
+        status=TransactionStatus.COMPLETED, description="Funds added",
     )
-    db.add(txn)
-    db.commit()
-    db.refresh(wallet)
-    return {
-        "success": True,
-        "message": "Funds added successfully",
-        "data": _serialize_wallet(wallet),
-    }
+    await txn.insert()
+    return {"success": True, "message": "Funds added successfully", "data": _serialize_wallet(wallet)}

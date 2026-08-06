@@ -1,9 +1,11 @@
+"""Async Fraud service — Beanie version."""
+from __future__ import annotations
+
 import json as json_module
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Float
+
 import httpx
 from loguru import logger
 
@@ -58,7 +60,7 @@ def _now_str() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _calculate_fraud_score(worker: Worker, db: Session) -> FraudScoreBreakdown:
+async def _calculate_fraud_score(worker: Worker) -> FraudScoreBreakdown:
     breakdown = FraudScoreBreakdown()
 
     # 1. Fake reviews score
@@ -66,98 +68,86 @@ def _calculate_fraud_score(worker: Worker, db: Session) -> FraudScoreBreakdown:
         review_to_job_ratio = worker.review_count / max(worker.completed_jobs, 1)
         if review_to_job_ratio > 0.8 and worker.rating > 4.5 and worker.completed_jobs < 20:
             breakdown.fake_reviews_score = min(100, (review_to_job_ratio - 0.5) * 100)
-        reviews = db.query(Review).filter(Review.worker_id == worker.id).all()
+        reviews = await Review.find(Review.worker_id == worker.id).to_list()
         if reviews:
             high_rating_count = sum(1 for r in reviews if r.rating >= 4.5)
             if len(reviews) >= 3 and high_rating_count == len(reviews):
                 breakdown.fake_reviews_score = max(breakdown.fake_reviews_score, 60)
 
     # 2. Cancellation score
-    total_bookings = db.query(Booking).filter(Booking.worker_id == worker.id).count()
+    all_bookings = await Booking.find(Booking.worker_id == worker.id).to_list()
+    total_bookings = len(all_bookings)
     if total_bookings > 0:
-        cancelled = db.query(Booking).filter(
-            Booking.worker_id == worker.id,
-            Booking.status == BookingStatus.CANCELLED
-        ).count()
+        cancelled = sum(1 for b in all_bookings if b.status == BookingStatus.CANCELLED or
+                        (hasattr(b.status, 'value') and b.status.value == BookingStatus.CANCELLED.value))
         cancel_rate = (cancelled / total_bookings) * 100
         if cancel_rate > 10:
             breakdown.cancellation_score = min(100, cancel_rate * 2)
         if cancel_rate > 50:
             breakdown.cancellation_score = 100
 
-    # 3. Price change score (check last 7 days changes)
-    price_bookings = db.query(Booking).filter(
-        Booking.worker_id == worker.id
-    ).order_by(Booking.created_at.desc()).limit(20).all()
-    if len(price_bookings) >= 2:
-        prices = [b.price for b in price_bookings if b.price and b.price > 0]
-        if len(prices) >= 2:
-            min_p, max_p = min(prices), max(prices)
-            if min_p > 0:
-                change_pct = ((max_p - min_p) / min_p) * 100
-                if change_pct > 50:
-                    breakdown.price_change_score = min(100, change_pct)
-                if change_pct > 200:
-                    breakdown.price_change_score = 100
+    # 3. Price change score
+    prices = [b.price for b in all_bookings if b.price and b.price > 0]
+    if len(prices) >= 2:
+        min_p, max_p = min(prices), max(prices)
+        if min_p > 0:
+            change_pct = ((max_p - min_p) / min_p) * 100
+            if change_pct > 50:
+                breakdown.price_change_score = min(100, change_pct)
+            if change_pct > 200:
+                breakdown.price_change_score = 100
 
     # 4. Complaint score
-    complaint_count = db.query(Complaint).filter(
-        Complaint.worker_id == worker.id
-    ).count()
+    complaints = await Complaint.find(Complaint.worker_id == worker.id).to_list()
+    complaint_count = len(complaints)
     if complaint_count > 0:
         breakdown.complaint_score = min(100, complaint_count * 25)
     if complaint_count >= 4:
         breakdown.complaint_score = 100
 
-    # 5. Suspicious login score (from suspicious activities)
-    suspicious_count = db.query(SuspiciousActivity).filter(
+    # 5. Suspicious login
+    suspicious_logins = await SuspiciousActivity.find(
         SuspiciousActivity.worker_id == worker.id,
-        SuspiciousActivity.activity_type == "suspicious_login"
-    ).count()
-    if suspicious_count > 0:
-        breakdown.suspicious_login_score = min(100, suspicious_count * 30)
+        SuspiciousActivity.activity_type == "suspicious_login",
+    ).to_list()
+    if suspicious_logins:
+        breakdown.suspicious_login_score = min(100, len(suspicious_logins) * 30)
 
-    # 6. Duplicate phone score
-    dup_phone_count = db.query(SuspiciousActivity).filter(
+    # 6. Duplicate phone
+    dup_phones = await SuspiciousActivity.find(
         SuspiciousActivity.worker_id == worker.id,
-        SuspiciousActivity.activity_type == "duplicate_phone"
-    ).count()
-    if dup_phone_count > 0:
-        breakdown.duplicate_phone_score = min(100, dup_phone_count * 40)
+        SuspiciousActivity.activity_type == "duplicate_phone",
+    ).to_list()
+    if dup_phones:
+        breakdown.duplicate_phone_score = min(100, len(dup_phones) * 40)
 
-    # 7. Duplicate device score
-    dup_device_count = db.query(SuspiciousActivity).filter(
+    # 7. Duplicate device
+    dup_devices = await SuspiciousActivity.find(
         SuspiciousActivity.worker_id == worker.id,
-        SuspiciousActivity.activity_type == "duplicate_device"
-    ).count()
-    if dup_device_count > 0:
-        breakdown.duplicate_device_score = min(100, dup_device_count * 40)
+        SuspiciousActivity.activity_type == "duplicate_device",
+    ).to_list()
+    if dup_devices:
+        breakdown.duplicate_device_score = min(100, len(dup_devices) * 40)
 
-    # 8. Fake profile score
-    fake_profile_count = db.query(SuspiciousActivity).filter(
+    # 8. Fake profile
+    fake_profiles = await SuspiciousActivity.find(
         SuspiciousActivity.worker_id == worker.id,
-        SuspiciousActivity.activity_type == "fake_profile"
-    ).count()
-    if fake_profile_count > 0:
-        breakdown.fake_profile_score = min(100, fake_profile_count * 50)
+        SuspiciousActivity.activity_type == "fake_profile",
+    ).to_list()
+    if fake_profiles:
+        breakdown.fake_profile_score = min(100, len(fake_profiles) * 50)
 
     return breakdown
 
 
 def _calculate_total_score(breakdown: FraudScoreBreakdown) -> float:
     weights = {
-        "fake_reviews_score": 0.15,
-        "cancellation_score": 0.20,
-        "price_change_score": 0.10,
-        "complaint_score": 0.20,
-        "suspicious_login_score": 0.10,
-        "duplicate_phone_score": 0.10,
-        "duplicate_device_score": 0.10,
-        "fake_profile_score": 0.05,
+        "fake_reviews_score": 0.15, "cancellation_score": 0.20,
+        "price_change_score": 0.10, "complaint_score": 0.20,
+        "suspicious_login_score": 0.10, "duplicate_phone_score": 0.10,
+        "duplicate_device_score": 0.10, "fake_profile_score": 0.05,
     }
-    total = 0.0
-    for field, weight in weights.items():
-        total += getattr(breakdown, field, 0.0) * weight
+    total = sum(getattr(breakdown, f, 0.0) * w for f, w in weights.items())
     return round(min(100, total), 1)
 
 
@@ -169,276 +159,162 @@ def _get_risk_level(score: float) -> str:
     return "low"
 
 
-async def _analyze_with_ai(worker: Worker, db: Session) -> dict:
+async def _analyze_with_ai(worker: Worker, heuristic_score: float) -> dict:
     if not settings.AI_API_KEY:
         return {
-            "risk_level": _get_risk_level(
-                _calculate_total_score(_calculate_fraud_score(worker, db))
-            ),
+            "risk_level": _get_risk_level(heuristic_score),
             "reason": "AI service not configured. Using heuristic analysis.",
-            "confidence": 0,
-            "recommendation": "monitor",
+            "confidence": 0, "recommendation": "monitor",
         }
 
-    total_bookings = db.query(Booking).filter(Booking.worker_id == worker.id).count()
-    cancelled = db.query(Booking).filter(
-        Booking.worker_id == worker.id,
-        Booking.status == BookingStatus.CANCELLED
-    ).count()
+    all_bookings = await Booking.find(Booking.worker_id == worker.id).to_list()
+    total_bookings = len(all_bookings)
+    cancelled = sum(1 for b in all_bookings if b.status == BookingStatus.CANCELLED or
+                    (hasattr(b.status, 'value') and b.status.value == BookingStatus.CANCELLED.value))
     cancel_rate = round((cancelled / max(total_bookings, 1)) * 100, 1)
-    complaint_count = db.query(Complaint).filter(
-        Complaint.worker_id == worker.id
-    ).count()
-    suspicious_count = db.query(SuspiciousActivity).filter(
-        SuspiciousActivity.worker_id == worker.id
-    ).count()
+    complaints = await Complaint.find(Complaint.worker_id == worker.id).to_list()
+    suspicious = await SuspiciousActivity.find(SuspiciousActivity.worker_id == worker.id).to_list()
 
-    price_bookings = db.query(Booking).filter(
-        Booking.worker_id == worker.id
-    ).order_by(Booking.created_at.desc()).limit(20).all()
+    prices = [b.price for b in all_bookings if b.price and b.price > 0]
     price_change_pct = 0
-    if len(price_bookings) >= 2:
-        prices = [b.price for b in price_bookings if b.price and b.price > 0]
-        if len(prices) >= 2:
-            min_p, max_p = min(prices), max(prices)
-            if min_p > 0:
-                price_change_pct = round(((max_p - min_p) / min_p) * 100, 1)
+    if len(prices) >= 2:
+        min_p, max_p = min(prices), max(prices)
+        if min_p > 0:
+            price_change_pct = round(((max_p - min_p) / min_p) * 100, 1)
 
     prompt = FRAUD_ANALYSIS_PROMPT.format(
-        worker_name=worker.name,
-        profession=worker.profession,
-        experience_years=worker.experience_years,
-        rating=worker.rating,
-        review_count=worker.review_count,
-        completed_jobs=worker.completed_jobs,
-        hourly_rate=worker.hourly_rate,
-        cancel_rate=cancel_rate,
-        complaint_count=complaint_count,
-        price_change_pct=price_change_pct,
-        suspicious_count=suspicious_count,
+        worker_name=worker.name, profession=worker.profession,
+        experience_years=worker.experience_years, rating=worker.rating,
+        review_count=worker.review_count, completed_jobs=worker.completed_jobs,
+        hourly_rate=worker.hourly_rate, cancel_rate=cancel_rate,
+        complaint_count=len(complaints), price_change_pct=price_change_pct,
+        suspicious_count=len(suspicious),
     )
 
-    headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
+    headers = {"Authorization": f"Bearer {settings.AI_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": settings.AI_MODEL,
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Analyze worker {worker.name} ({worker.id}) for fraud risk."},
         ],
-        "max_tokens": 512,
-        "temperature": 0.3,
+        "max_tokens": 512, "temperature": 0.3,
     }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{settings.AI_API_BASE_URL}/chat/completions",
-                json=payload,
-                headers=headers,
+                f"{settings.AI_API_BASE_URL}/chat/completions", json=payload, headers=headers,
             )
-
             if response.status_code != 200:
-                body = await response.aread()
-                logger.error(f"Fraud AI API error {response.status_code}: {body[:500]}")
-                heuristic_score = _calculate_total_score(_calculate_fraud_score(worker, db))
-                return {
-                    "risk_level": _get_risk_level(heuristic_score),
-                    "reason": "AI analysis unavailable. Used heuristic scoring.",
-                    "confidence": 0,
-                    "recommendation": "monitor",
-                }
+                logger.error(f"Fraud AI API error {response.status_code}")
+                return {"risk_level": _get_risk_level(heuristic_score), "reason": "AI unavailable.", "confidence": 0, "recommendation": "monitor"}
 
             data = response.json()
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-            stripped = content.strip()
-            if stripped.startswith("```json"):
-                stripped = stripped[len("```json"):]
-            elif stripped.startswith("```"):
-                stripped = stripped[len("```"):]
-            if stripped.endswith("```"):
-                stripped = stripped[:-len("```")]
-            stripped = stripped.strip()
-
+            stripped = content.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
             try:
                 parsed = json_module.loads(stripped)
-                required = {"risk_level", "reason", "confidence", "recommendation"}
-                if not required.issubset(parsed.keys()):
-                    raise ValueError("Missing required keys")
-                return parsed
+                if {"risk_level", "reason", "confidence", "recommendation"}.issubset(parsed.keys()):
+                    return parsed
             except (json_module.JSONDecodeError, ValueError):
-                logger.warning(f"Fraud AI returned invalid JSON: {content[:200]}")
-                heuristic_score = _calculate_total_score(_calculate_fraud_score(worker, db))
-                return {
-                    "risk_level": _get_risk_level(heuristic_score),
-                    "reason": "AI returned invalid response. Used heuristic scoring.",
-                    "confidence": 0,
-                    "recommendation": "monitor",
-                }
-
+                pass
+            return {"risk_level": _get_risk_level(heuristic_score), "reason": "AI invalid response.", "confidence": 0, "recommendation": "monitor"}
     except Exception as e:
         logger.error(f"Fraud AI analysis error: {e}")
-        heuristic_score = _calculate_total_score(_calculate_fraud_score(worker, db))
-        return {
-            "risk_level": _get_risk_level(heuristic_score),
-            "reason": "AI analysis failed. Used heuristic scoring.",
-            "confidence": 0,
-            "recommendation": "monitor",
-        }
+        return {"risk_level": _get_risk_level(heuristic_score), "reason": "AI failed.", "confidence": 0, "recommendation": "monitor"}
 
 
-def _get_or_create_fraud_data(worker_id: str, db: Session) -> WorkerFraudData:
-    data = db.query(WorkerFraudData).filter(WorkerFraudData.worker_id == worker_id).first()
+async def _get_or_create_fraud_data(worker_id: str) -> WorkerFraudData:
+    data = await WorkerFraudData.find_one(WorkerFraudData.worker_id == worker_id)
     if not data:
-        data = WorkerFraudData(
-            id=str(uuid.uuid4()),
-            worker_id=worker_id,
-            fraud_score=0.0,
-            is_disabled=False,
-            risk_level="low",
-        )
-        db.add(data)
-        db.commit()
-        db.refresh(data)
+        data = WorkerFraudData(worker_id=worker_id, fraud_score=0.0, is_disabled=False, risk_level="low")
+        await data.insert()
     return data
 
 
-async def analyze_worker(worker_id: str, trigger_reason: Optional[str] = None, db: Optional[Session] = None) -> FraudAnalysisResponse:
-    from app.db.database import SessionLocal
-    close_db = False
-    if db is None:
-        db = SessionLocal()
-        close_db = True
+async def analyze_worker(worker_id: str, trigger_reason: Optional[str] = None) -> FraudAnalysisResponse:
+    worker = await Worker.find_one(Worker.id == worker_id)
+    if not worker:
+        raise ValueError(f"Worker {worker_id} not found")
 
-    try:
-        worker = db.query(Worker).filter(Worker.id == worker_id).first()
-        if not worker:
-            raise ValueError(f"Worker {worker_id} not found")
+    breakdown = await _calculate_fraud_score(worker)
+    heuristic_score = _calculate_total_score(breakdown)
+    ai_result = await _analyze_with_ai(worker, heuristic_score)
 
-        breakdown = _calculate_fraud_score(worker, db)
-        heuristic_score = _calculate_total_score(breakdown)
-        ai_result = await _analyze_with_ai(worker, db)
+    risk_level = ai_result.get("risk_level", _get_risk_level(heuristic_score))
+    reason = ai_result.get("reason", "Standard heuristic analysis")
+    confidence = ai_result.get("confidence", 0)
+    recommendation = ai_result.get("recommendation", "monitor")
 
-        risk_level = ai_result.get("risk_level", _get_risk_level(heuristic_score))
-        reason = ai_result.get("reason", "Standard heuristic analysis")
-        confidence = ai_result.get("confidence", 0)
-        recommendation = ai_result.get("recommendation", "monitor")
+    final_score = heuristic_score
+    if confidence and confidence > 50:
+        final_score = round(heuristic_score * 0.4 + (101 - heuristic_score) * 0.6, 1)
+        if risk_level in ("high", "critical"):
+            final_score = max(final_score, 70)
+        elif risk_level == "medium":
+            final_score = max(final_score, 40)
 
-        final_score = heuristic_score
-        if confidence and confidence > 50:
-            final_score = round(heuristic_score * 0.4 + (101 - heuristic_score) * 0.6, 1)
-            if risk_level in ("high", "critical"):
-                final_score = max(final_score, 70)
-            elif risk_level == "medium":
-                final_score = max(final_score, 40)
+    final_score = max(0, min(100, final_score))
+    risk_level = _get_risk_level(final_score)
+    is_disabled = final_score >= 95
+    now = _now_str()
 
-        final_score = max(0, min(100, final_score))
-        risk_level = _get_risk_level(final_score)
+    fraud_report = FraudReport(
+        worker_id=worker_id, fraud_score=final_score, risk_level=risk_level,
+        reason=reason, confidence=confidence, recommendation=recommendation,
+        analysis_details={"score_breakdown": breakdown.model_dump(), "ai_raw": ai_result, "heuristic_score": heuristic_score},
+        triggered_by=trigger_reason or "manual", analyzed_at=now,
+    )
+    await fraud_report.insert()
 
-        is_disabled = final_score >= 95
-        now = _now_str()
+    fraud_data = await _get_or_create_fraud_data(worker_id)
+    fraud_data.fraud_score = final_score
+    fraud_data.risk_level = risk_level
+    fraud_data.is_disabled = is_disabled
+    fraud_data.last_analysis_at = now
+    await fraud_data.save()
 
-        fraud_report = FraudReport(
-            id=str(uuid.uuid4()),
-            worker_id=worker_id,
-            fraud_score=final_score,
-            risk_level=risk_level,
-            reason=reason,
-            confidence=confidence,
-            recommendation=recommendation,
-            analysis_details={
-                "score_breakdown": breakdown.model_dump(),
-                "ai_raw": ai_result,
-                "heuristic_score": heuristic_score,
-            },
-            triggered_by=trigger_reason or "manual",
-            analyzed_at=now,
-        )
-        db.add(fraud_report)
+    if final_score >= 95:
+        worker.is_online = False
+        await worker.save()
 
-        fraud_data = _get_or_create_fraud_data(worker_id, db)
-        fraud_data.fraud_score = final_score
-        fraud_data.risk_level = risk_level
-        fraud_data.is_disabled = is_disabled
-        fraud_data.last_analysis_at = now
+    suspicious = await SuspiciousActivity.find(SuspiciousActivity.worker_id == worker_id).to_list()
 
-        if final_score >= 95:
-            worker.is_online = False
-
-        db.commit()
-        db.refresh(fraud_report)
-
-        suspicious = db.query(SuspiciousActivity).filter(
-            SuspiciousActivity.worker_id == worker_id
-        ).order_by(SuspiciousActivity.detected_at.desc()).all()
-
-        return FraudAnalysisResponse(
-            worker_id=worker_id,
-            worker_name=worker.name,
-            fraud_score=final_score,
-            risk_level=risk_level,
-            reason=reason,
-            confidence=confidence,
-            recommendation=recommendation,
-            score_breakdown=breakdown,
-            suspicious_activities=[
-                SuspiciousActivityResponse(
-                    id=a.id,
-                    worker_id=a.worker_id,
-                    activity_type=a.activity_type,
-                    description=a.description,
-                    severity=a.severity,
-                    metadata_json=a.metadata_json,
-                    detected_at=a.detected_at,
-                    created_at=a.created_at,
-                ) for a in suspicious
-            ],
-            report=FraudReportResponse(
-                id=fraud_report.id,
-                worker_id=fraud_report.worker_id,
-                fraud_score=fraud_report.fraud_score,
-                risk_level=fraud_report.risk_level,
-                reason=fraud_report.reason,
-                confidence=fraud_report.confidence,
-                recommendation=fraud_report.recommendation,
-                analysis_details=fraud_report.analysis_details,
-                triggered_by=fraud_report.triggered_by,
-                analyzed_at=fraud_report.analyzed_at,
-                created_at=fraud_report.created_at,
-            ),
-            is_disabled=is_disabled,
-        )
-    finally:
-        if close_db:
-            db.close()
+    return FraudAnalysisResponse(
+        worker_id=worker_id, worker_name=worker.name,
+        fraud_score=final_score, risk_level=risk_level, reason=reason,
+        confidence=confidence, recommendation=recommendation, score_breakdown=breakdown,
+        suspicious_activities=[
+            SuspiciousActivityResponse(
+                id=a.id, worker_id=a.worker_id, activity_type=a.activity_type,
+                description=a.description, severity=a.severity,
+                metadata_json=a.metadata_json, detected_at=a.detected_at, created_at=a.created_at,
+            ) for a in suspicious
+        ],
+        report=FraudReportResponse(
+            id=fraud_report.id, worker_id=fraud_report.worker_id, fraud_score=fraud_report.fraud_score,
+            risk_level=fraud_report.risk_level, reason=fraud_report.reason, confidence=fraud_report.confidence,
+            recommendation=fraud_report.recommendation, analysis_details=fraud_report.analysis_details,
+            triggered_by=fraud_report.triggered_by, analyzed_at=fraud_report.analyzed_at, created_at=fraud_report.created_at,
+        ),
+        is_disabled=is_disabled,
+    )
 
 
-def get_fraud_report(worker_id: str, db: Session) -> Optional[FraudAnalysisResponse]:
-    worker = db.query(Worker).filter(Worker.id == worker_id).first()
+async def get_fraud_report(worker_id: str) -> Optional[FraudAnalysisResponse]:
+    worker = await Worker.find_one(Worker.id == worker_id)
     if not worker:
         return None
 
-    fraud_data = db.query(WorkerFraudData).filter(
-        WorkerFraudData.worker_id == worker_id
-    ).first()
-
-    latest_report = db.query(FraudReport).filter(
-        FraudReport.worker_id == worker_id
-    ).order_by(FraudReport.created_at.desc()).first()
-
-    suspicious = db.query(SuspiciousActivity).filter(
-        SuspiciousActivity.worker_id == worker_id
-    ).order_by(SuspiciousActivity.detected_at.desc()).all()
-
-    breakdown = _calculate_fraud_score(worker, db)
+    fraud_data = await WorkerFraudData.find_one(WorkerFraudData.worker_id == worker_id)
+    all_reports = await FraudReport.find(FraudReport.worker_id == worker_id).to_list()
+    latest_report = max(all_reports, key=lambda r: r.created_at or datetime.min) if all_reports else None
+    suspicious = await SuspiciousActivity.find(SuspiciousActivity.worker_id == worker_id).to_list()
+    breakdown = await _calculate_fraud_score(worker)
 
     return FraudAnalysisResponse(
-        worker_id=worker_id,
-        worker_name=worker.name,
+        worker_id=worker_id, worker_name=worker.name,
         fraud_score=fraud_data.fraud_score if fraud_data else 0.0,
         risk_level=fraud_data.risk_level if fraud_data else "low",
         reason=latest_report.reason if latest_report else None,
@@ -447,109 +323,57 @@ def get_fraud_report(worker_id: str, db: Session) -> Optional[FraudAnalysisRespo
         score_breakdown=breakdown,
         suspicious_activities=[
             SuspiciousActivityResponse(
-                id=a.id,
-                worker_id=a.worker_id,
-                activity_type=a.activity_type,
-                description=a.description,
-                severity=a.severity,
-                metadata_json=a.metadata_json,
-                detected_at=a.detected_at,
-                created_at=a.created_at,
+                id=a.id, worker_id=a.worker_id, activity_type=a.activity_type,
+                description=a.description, severity=a.severity,
+                metadata_json=a.metadata_json, detected_at=a.detected_at, created_at=a.created_at,
             ) for a in suspicious
         ],
         report=FraudReportResponse(
-            id=latest_report.id,
-            worker_id=latest_report.worker_id,
-            fraud_score=latest_report.fraud_score,
-            risk_level=latest_report.risk_level,
-            reason=latest_report.reason,
-            confidence=latest_report.confidence,
-            recommendation=latest_report.recommendation,
-            analysis_details=latest_report.analysis_details,
-            triggered_by=latest_report.triggered_by,
-            analyzed_at=latest_report.analyzed_at,
-            created_at=latest_report.created_at,
+            id=latest_report.id, worker_id=latest_report.worker_id, fraud_score=latest_report.fraud_score,
+            risk_level=latest_report.risk_level, reason=latest_report.reason, confidence=latest_report.confidence,
+            recommendation=latest_report.recommendation, analysis_details=latest_report.analysis_details,
+            triggered_by=latest_report.triggered_by, analyzed_at=latest_report.analyzed_at, created_at=latest_report.created_at,
         ) if latest_report else None,
         is_disabled=fraud_data.is_disabled if fraud_data else False,
     )
 
 
-def get_high_risk_workers(
-    db: Session,
-    min_score: float = 70,
-    page: int = 1,
-    limit: int = 20,
-) -> HighRiskWorkerResponse:
-    query = db.query(
-        WorkerFraudData, Worker,
-        func.count(Complaint.id).label("complaint_count"),
-        func.count(SuspiciousActivity.id).label("suspicious_count"),
-    ).join(
-        Worker, WorkerFraudData.worker_id == Worker.id
-    ).outerjoin(
-        Complaint, Complaint.worker_id == Worker.id
-    ).outerjoin(
-        SuspiciousActivity, SuspiciousActivity.worker_id == Worker.id
-    ).filter(
-        WorkerFraudData.fraud_score >= min_score
-    ).group_by(
-        WorkerFraudData.id, Worker.id
-    ).order_by(
-        WorkerFraudData.fraud_score.desc()
-    )
+async def get_high_risk_workers(min_score: float = 70, page: int = 1, limit: int = 20) -> HighRiskWorkerResponse:
+    all_fd = await WorkerFraudData.find(WorkerFraudData.fraud_score >= min_score).to_list()
+    all_fd.sort(key=lambda x: x.fraud_score, reverse=True)
+    total = len(all_fd)
+    paged = all_fd[(page - 1) * limit: page * limit]
 
-    total = query.count()
-    offsets = (page - 1) * limit
-    rows = query.offset(offsets).limit(limit).all()
-
-    workers = []
-    for fraud_data, worker, complaint_count, suspicious_count in rows:
-        latest_report = db.query(FraudReport).filter(
-            FraudReport.worker_id == worker.id
-        ).order_by(FraudReport.created_at.desc()).first()
-
-        workers.append(WorkerFraudSummary(
-            worker_id=worker.id,
-            worker_name=worker.name,
-            worker_avatar=worker.avatar,
-            worker_profession=worker.profession,
-            fraud_score=fraud_data.fraud_score,
-            risk_level=fraud_data.risk_level,
-            is_disabled=fraud_data.is_disabled,
-            complaint_count=complaint_count,
-            suspicious_activity_count=suspicious_count,
-            last_analysis=fraud_data.last_analysis_at,
+    workers_out = []
+    for fd in paged:
+        worker = await Worker.find_one(Worker.id == fd.worker_id)
+        if not worker:
+            continue
+        complaints = await Complaint.find(Complaint.worker_id == worker.id).to_list()
+        suspicious = await SuspiciousActivity.find(SuspiciousActivity.worker_id == worker.id).to_list()
+        all_reports = await FraudReport.find(FraudReport.worker_id == worker.id).to_list()
+        latest_report = max(all_reports, key=lambda r: r.created_at or datetime.min) if all_reports else None
+        workers_out.append(WorkerFraudSummary(
+            worker_id=worker.id, worker_name=worker.name, worker_avatar=worker.avatar,
+            worker_profession=worker.profession, fraud_score=fd.fraud_score,
+            risk_level=fd.risk_level, is_disabled=fd.is_disabled,
+            complaint_count=len(complaints), suspicious_activity_count=len(suspicious),
+            last_analysis=fd.last_analysis_at,
             recommendation=latest_report.recommendation if latest_report else None,
         ))
 
-    return HighRiskWorkerResponse(
-        workers=workers,
-        total=total,
-        page=page,
-        limit=limit,
-    )
+    return HighRiskWorkerResponse(workers=workers_out, total=total, page=page, limit=limit)
 
 
-def get_public_fraud_status(worker_id: str, db: Session) -> PublicFraudStatus:
-    worker = db.query(Worker).filter(Worker.id == worker_id).first()
+async def get_public_fraud_status(worker_id: str) -> PublicFraudStatus:
+    worker = await Worker.find_one(Worker.id == worker_id)
     if not worker:
-        return PublicFraudStatus(
-            worker_id=worker_id,
-            fraud_score=0,
-            risk_level="low",
-            is_disabled=False,
-            recommendation=None,
-        )
+        return PublicFraudStatus(worker_id=worker_id, fraud_score=0, risk_level="low", is_disabled=False, recommendation=None)
 
-    _get_or_create_fraud_data(worker_id, db)
-
-    fraud_data = db.query(WorkerFraudData).filter(
-        WorkerFraudData.worker_id == worker_id
-    ).first()
-
-    latest_report = db.query(FraudReport).filter(
-        FraudReport.worker_id == worker_id
-    ).order_by(FraudReport.created_at.desc()).first()
+    await _get_or_create_fraud_data(worker_id)
+    fraud_data = await WorkerFraudData.find_one(WorkerFraudData.worker_id == worker_id)
+    all_reports = await FraudReport.find(FraudReport.worker_id == worker_id).to_list()
+    latest_report = max(all_reports, key=lambda r: r.created_at or datetime.min) if all_reports else None
 
     return PublicFraudStatus(
         worker_id=worker_id,
@@ -560,34 +384,17 @@ def get_public_fraud_status(worker_id: str, db: Session) -> PublicFraudStatus:
     )
 
 
-def add_suspicious_activity(
+async def add_suspicious_activity(
     worker_id: str,
     activity_type: str,
     description: str,
     severity: str = "medium",
     metadata_json: Optional[dict] = None,
-    db: Optional[Session] = None,
 ) -> SuspiciousActivity:
-    from app.db.database import SessionLocal
-    close_db = False
-    if db is None:
-        db = SessionLocal()
-        close_db = True
-
-    try:
-        activity = SuspiciousActivity(
-            id=str(uuid.uuid4()),
-            worker_id=worker_id,
-            activity_type=activity_type,
-            description=description,
-            severity=severity,
-            metadata_json=metadata_json or {},
-            detected_at=_now_str(),
-        )
-        db.add(activity)
-        db.commit()
-        db.refresh(activity)
-        return activity
-    finally:
-        if close_db:
-            db.close()
+    activity = SuspiciousActivity(
+        worker_id=worker_id, activity_type=activity_type,
+        description=description, severity=severity,
+        metadata_json=metadata_json or {}, detected_at=_now_str(),
+    )
+    await activity.insert()
+    return activity

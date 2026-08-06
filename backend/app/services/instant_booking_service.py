@@ -1,18 +1,7 @@
-"""Instant & Emergency Booking Service.
+"""Async Instant & Emergency Booking Service — Beanie version."""
+from __future__ import annotations
 
-Provides worker-matching logic for instant and emergency bookings:
-
-* ``find_nearest_workers`` — returns online workers within a radius of the
-  customer's location, scored by distance, rating, trust score, and
-  availability, then sorted fastest-first.
-
-* ``create_instant_booking`` — wraps the normal booking flow, auto-assigning
-  the best available worker and returning an ETA.  Falls back to a regular
-  (scheduled) booking when no instant worker is available.
-"""
 from typing import Optional
-
-from sqlalchemy.orm import Session
 
 from app.models.booking import BookingType
 from app.models.worker import Worker
@@ -24,9 +13,7 @@ from app.services.recommendation_service import (
     _trust_score,
 )
 from app.services.booking_service import BookingService
-from app.core.exceptions import NotFoundException
-from app.services.booking_service import BookingService
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import NotFoundException, BadRequestException
 
 
 EMERGENCY_SURGE_MULTIPLIER = 1.20
@@ -34,8 +21,7 @@ DEFAULT_INSTANT_RADIUS_KM = 10.0
 DEFAULT_INSTANT_LIMIT = 8
 
 
-def find_nearest_workers(
-    db: Session,
+async def find_nearest_workers(
     lat: float,
     lng: float,
     service_id: Optional[str] = None,
@@ -44,32 +30,16 @@ def find_nearest_workers(
     limit: int = DEFAULT_INSTANT_LIMIT,
     is_emergency: bool = False,
 ) -> list[dict]:
-    """Return online workers near *(lat, lng)* sorted by ETA.
-
-    Filters:
-        * ``Worker.is_online == True``
-        * optional :service_id: → worker must have the matching category or skill
-        * within *radius_km* kilometres
-
-    Ranking (closest ETA first):
-        1. Travel time (distance / 20 km·h⁻¹)
-        2. Response time
-        3. Trust score (emergency only — trusts are weighted higher)
-        4. Rating
-
-    Each result includes the computed *eta_minutes* and *distance_km*.
-    """
-    from app.models.service import Service
-
+    """Return online workers near (lat, lng) sorted by ETA."""
     service_category_ids: set[str] = set()
     if service_id:
-        svc = db.query(Service).filter(Service.id == service_id).first()
+        svc = await Service.find_one(Service.id == service_id)
         if svc and svc.category_id:
             service_category_ids.add(svc.category_id)
     if category_id:
         service_category_ids.add(category_id)
 
-    locations = db.query(WorkerLocation).all()
+    locations = await WorkerLocation.find_all().to_list()
 
     scored: list[dict] = []
     for loc in locations:
@@ -77,23 +47,17 @@ def find_nearest_workers(
         if dist > radius_km:
             continue
 
-        worker = db.query(Worker).filter(Worker.id == loc.worker_id).first()
+        worker = await Worker.find_one(Worker.id == loc.worker_id)
         if worker is None or not worker.is_online:
             continue
 
-        category_match = True
         if service_category_ids:
             worker_categories = set(worker.category_ids or [])
-            category_match = bool(service_category_ids & worker_categories)
-
-        if not category_match and service_category_ids:
-            skill_names = {s.skill for s in (worker.skills or [])}
-            category_names = service_category_ids
-            if not (category_names & skill_names):
+            if not (service_category_ids & worker_categories):
                 continue
 
-        response_time = _response_time_minutes(db, worker)
-        trust = _trust_score(db, worker)
+        trust = await _trust_score(worker)
+        response_time = _response_time_minutes(worker)
         travel_min = (dist / 20.0) * 60.0 if dist else 25.0
         eta = int(round(response_time + travel_min))
 
@@ -102,23 +66,14 @@ def find_nearest_workers(
             score -= trust
 
         scored.append({
-            "id": worker.id,
-            "user_id": worker.user_id,
-            "name": worker.name,
-            "avatar": worker.avatar,
-            "profession": worker.profession,
-            "bio": worker.bio,
-            "experience_years": worker.experience_years,
-            "completed_jobs": worker.completed_jobs,
-            "rating": worker.rating,
-            "review_count": worker.review_count,
-            "hourly_rate": worker.hourly_rate,
-            "is_online": worker.is_online,
+            "id": worker.id, "user_id": worker.user_id, "name": worker.name,
+            "avatar": worker.avatar, "profession": worker.profession, "bio": worker.bio,
+            "experience_years": worker.experience_years, "completed_jobs": worker.completed_jobs,
+            "rating": worker.rating, "review_count": worker.review_count,
+            "hourly_rate": worker.hourly_rate, "is_online": worker.is_online,
             "category_ids": worker.category_ids or [],
-            "trust_score": trust,
-            "verification_badge": worker.verification_badge,
-            "response_time_minutes": response_time,
-            "eta_minutes": eta,
+            "trust_score": trust, "verification_badge": worker.verification_badge,
+            "response_time_minutes": response_time, "eta_minutes": eta,
             "distance_km": round(dist, 2),
         })
 
@@ -126,9 +81,9 @@ def find_nearest_workers(
     return scored[:limit]
 
 
-def create_instant_booking(
-    db: Session,
+async def create_instant_booking(
     customer_id: str,
+    user_id: str,
     service_id: str,
     problem_description: str,
     scheduled_date: str,
@@ -140,26 +95,10 @@ def create_instant_booking(
     coupon_code: Optional[str] = None,
     problem_images: Optional[list] = None,
 ) -> dict:
-    """Create an instant or emergency booking.
-
-    1. Searches for the nearest online worker.
-    2. If found — assigns them, sets ``booking_type`` / ``is_emergency`` /
-       ``eta_minutes`` and returns the booking.
-    3. If none found — falls back to a normal scheduled booking (no worker
-       assigned) and includes ``fallback=True`` in the result so the frontend
-       can show a helpful message.
-
-    Emergency bookings apply a 20 % surge to the final price.
-    """
-    service = db.query(Service).filter(Service.id == service_id).first()
+    """Create an instant or emergency booking."""
+    service = await Service.find_one(Service.id == service_id)
     if service is None:
         raise NotFoundException(message="Service not found")
-
-    base_price = service.base_price
-    if is_emergency:
-        final_price = round(base_price * EMERGENCY_SURGE_MULTIPLIER, 2)
-    else:
-        final_price = base_price
 
     workers = []
     assigned_worker_id: Optional[str] = None
@@ -167,12 +106,9 @@ def create_instant_booking(
     fallback = False
 
     if customer_lat is not None and customer_lng is not None:
-        workers = find_nearest_workers(
-            db,
-            lat=customer_lat,
-            lng=customer_lng,
-            service_id=service_id,
-            is_emergency=is_emergency,
+        workers = await find_nearest_workers(
+            lat=customer_lat, lng=customer_lng,
+            service_id=service_id, is_emergency=is_emergency,
         )
 
     if workers:
@@ -184,20 +120,13 @@ def create_instant_booking(
 
     booking_type = BookingType.EMERGENCY if is_emergency else BookingType.INSTANT
 
-    svc = BookingService(db)
-    result = svc.create_booking(
-        customer_id=customer_id,
-        service_id=service_id,
-        problem_description=problem_description,
-        scheduled_date=scheduled_date,
-        scheduled_time=scheduled_time,
-        address=address,
-        worker_id=assigned_worker_id,
-        coupon_code=coupon_code,
-        problem_images=problem_images,
-        booking_type=booking_type.value,
-        is_emergency=is_emergency,
-        eta_minutes=eta,
+    svc = BookingService()
+    result = await svc.create_booking(
+        customer_id=customer_id, user_id=user_id, service_id=service_id,
+        problem_description=problem_description, scheduled_date=scheduled_date,
+        scheduled_time=scheduled_time, address=address, worker_id=assigned_worker_id,
+        coupon_code=coupon_code, problem_images=problem_images,
+        booking_type=booking_type.value, is_emergency=is_emergency, eta_minutes=eta,
     )
 
     result["eta_minutes"] = eta

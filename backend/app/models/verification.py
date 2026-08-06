@@ -1,124 +1,120 @@
+"""Worker verification pipeline Beanie documents."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, ForeignKey, JSON, Text, DateTime
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class WorkerVerification(BaseModel):
-    """One verification attempt per worker. Aggregates AI skill test,
-    practical assessment, voice interview, documents and experience."""
+class WorkerVerification(BaseDocument):
+    """One verification attempt per worker."""
 
-    __tablename__ = "worker_verifications"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    attempt_number: int = 1
+    profession: str
+    status: str = "in_progress"  # not_started | in_progress | completed | failed
+    step: str = "documents"  # documents | skill_test | practical | interview | completed
+    technical_score: Optional[float] = None
+    practical_score: Optional[float] = None
+    interview_score: Optional[float] = None
+    documents_score: Optional[float] = None
+    experience_score: Optional[float] = None
+    trust_score: Optional[float] = None
+    badge: Optional[str] = None  # gold | pro | beginner | rejected
+    document_media: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    skill_test_anti_cheat: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    training_recommendations: List[Any] = Field(default_factory=list)
+    admin_status: str = "pending"  # pending | approved | rejected
+    admin_notes: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    retry_available_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    is_demo: bool = False
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    attempt_number = Column(Integer, default=1, nullable=False)
-    profession = Column(String(255), nullable=False)
-    status = Column(String(30), default="in_progress", nullable=False)  # not_started | in_progress | completed | failed
-    step = Column(String(30), default="documents", nullable=False)      # documents | skill_test | practical | interview | completed
-    technical_score = Column(Float, nullable=True)
-    practical_score = Column(Float, nullable=True)
-    interview_score = Column(Float, nullable=True)
-    documents_score = Column(Float, nullable=True)
-    experience_score = Column(Float, nullable=True)
-    trust_score = Column(Float, nullable=True)
-    badge = Column(String(20), nullable=True)  # gold | pro | beginner | rejected
-    document_media = Column(JSON, default=dict, nullable=True)  # photos/videos uploaded during documents step
-    skill_test_anti_cheat = Column(JSON, default=dict, nullable=True)
-    training_recommendations = Column(JSON, default=list, nullable=True)
-    admin_status = Column(String(20), default="pending", nullable=False)  # pending | approved | rejected
-    admin_notes = Column(Text, nullable=True)
-    reviewed_by = Column(String(255), nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    retry_available_at = Column(DateTime(timezone=True), nullable=True)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-    is_demo = Column(Boolean, default=False, nullable=False)
-
-    worker = relationship("Worker", back_populates="verifications")
-    skill_test = relationship("SkillTestSession", back_populates="verification", uselist=False, cascade="all, delete-orphan")
-    practical = relationship("PracticalAssessment", back_populates="verification", uselist=False, cascade="all, delete-orphan")
-    interview = relationship("VoiceInterview", back_populates="verification", uselist=False, cascade="all, delete-orphan")
-    certificate = relationship("VerificationCertificate", back_populates="verification", uselist=False, cascade="all, delete-orphan")
+    class Settings:
+        name = "worker_verifications"
 
 
-class SkillTestSession(BaseModel):
-    """A single AI-generated technical test attempt with full anti-cheating analytics."""
+class SkillTestSession(BaseDocument):
+    """AI-generated technical test attempt."""
 
-    __tablename__ = "skill_test_sessions"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    verification_id: str
+    worker_id: str
+    profession: str
+    status: str = "started"  # started | submitted | failed
+    questions: List[Any] = Field(default_factory=list)
+    answers: List[Any] = Field(default_factory=list)
+    score: Optional[float] = None
+    tab_switch_count: int = 0
+    warnings_issued: int = 0
+    time_per_question: List[Any] = Field(default_factory=list)
+    skipped_count: int = 0
+    suspicious_fast_answers: List[Any] = Field(default_factory=list)
+    failed: bool = False
+    started_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    verification_id = Column(String(36), ForeignKey("worker_verifications.id", ondelete="CASCADE"), nullable=False, index=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    profession = Column(String(255), nullable=False)
-    status = Column(String(20), default="started", nullable=False)  # started | submitted | failed
-    questions = Column(JSON, default=list, nullable=True)
-    answers = Column(JSON, default=list, nullable=True)
-    score = Column(Float, nullable=True)
-    tab_switch_count = Column(Integer, default=0, nullable=False)
-    warnings_issued = Column(Integer, default=0, nullable=False)
-    time_per_question = Column(JSON, default=list, nullable=True)
-    skipped_count = Column(Integer, default=0, nullable=False)
-    suspicious_fast_answers = Column(JSON, default=list, nullable=True)
-    failed = Column(Boolean, default=False, nullable=False)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-
-    verification = relationship("WorkerVerification", back_populates="skill_test")
+    class Settings:
+        name = "skill_test_sessions"
 
 
-class PracticalAssessment(BaseModel):
+class PracticalAssessment(BaseDocument):
     """Worker-uploaded work photos/videos evaluated by Gemini Vision."""
 
-    __tablename__ = "practical_assessments"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    verification_id: str
+    worker_id: str
+    media_urls: List[Any] = Field(default_factory=list)
+    evaluation: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    score: Optional[float] = None
+    status: str = "submitted"
+    submitted_at: Optional[datetime] = None
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    verification_id = Column(String(36), ForeignKey("worker_verifications.id", ondelete="CASCADE"), nullable=False, index=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    media_urls = Column(JSON, default=list, nullable=True)
-    evaluation = Column(JSON, default=dict, nullable=True)
-    score = Column(Float, nullable=True)
-    status = Column(String(20), default="submitted", nullable=False)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-
-    verification = relationship("WorkerVerification", back_populates="practical")
-
-
-class VoiceInterview(BaseModel):
-    """AI interviewer session. Gemini generates follow-up questions dynamically."""
-
-    __tablename__ = "voice_interviews"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    verification_id = Column(String(36), ForeignKey("worker_verifications.id", ondelete="CASCADE"), nullable=False, index=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    profession = Column(String(255), nullable=False)
-    exchanges = Column(JSON, default=list, nullable=True)
-    evaluation = Column(JSON, default=dict, nullable=True)
-    score = Column(Float, nullable=True)
-    status = Column(String(20), default="in_progress", nullable=False)  # in_progress | completed
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
-
-    verification = relationship("WorkerVerification", back_populates="interview")
+    class Settings:
+        name = "practical_assessments"
 
 
-class VerificationCertificate(BaseModel):
+class VoiceInterview(BaseDocument):
+    """AI interviewer session."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    verification_id: str
+    worker_id: str
+    profession: str
+    exchanges: List[Any] = Field(default_factory=list)
+    evaluation: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    score: Optional[float] = None
+    status: str = "in_progress"  # in_progress | completed
+    started_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+
+    class Settings:
+        name = "voice_interviews"
+
+
+class VerificationCertificate(BaseDocument):
     """OneDW Verified Professional certificate with QR + PDF."""
 
-    __tablename__ = "verification_certificates"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    verification_id: str
+    worker_id: str
+    certificate_no: str
+    worker_name: str
+    profession: str
+    trust_score: float
+    badge: str
+    issued_at: Optional[datetime] = None
+    qr_code_url: Optional[str] = None
+    pdf_url: Optional[str] = None
+    is_active: bool = True
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    verification_id = Column(String(36), ForeignKey("worker_verifications.id", ondelete="CASCADE"), nullable=False, index=True)
-    worker_id = Column(String(36), ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    certificate_no = Column(String(50), unique=True, nullable=False, index=True)
-    worker_name = Column(String(255), nullable=False)
-    profession = Column(String(255), nullable=False)
-    trust_score = Column(Float, nullable=False)
-    badge = Column(String(20), nullable=False)
-    issued_at = Column(DateTime(timezone=True), nullable=True)
-    qr_code_url = Column(String(500), nullable=True)
-    pdf_url = Column(String(500), nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-
-    verification = relationship("WorkerVerification", back_populates="certificate")
+    class Settings:
+        name = "verification_certificates"

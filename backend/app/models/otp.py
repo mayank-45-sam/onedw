@@ -1,14 +1,21 @@
+"""OTP Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Boolean, DateTime
-from app.models.base import BaseModel
+from datetime import datetime
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class OTP(BaseModel):
-    __tablename__ = "otps"
+class OTP(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    otp_code: str
+    purpose: str
+    expires_at: datetime
+    used: bool = False
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(255), nullable=False, index=True)
-    otp_code = Column(String(6), nullable=False)
-    purpose = Column(String(50), nullable=False, index=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    used = Column(Boolean, default=False, nullable=False)
+    class Settings:
+        name = "otps"

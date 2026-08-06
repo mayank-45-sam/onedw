@@ -1,5 +1,5 @@
-from typing import Optional
-from sqlalchemy.orm import Session
+"""Async Coupon service — Beanie version."""
+from __future__ import annotations
 
 from app.models.coupon import Coupon
 from app.repositories.coupon_repository import CouponRepository
@@ -10,13 +10,12 @@ from app.core.security import utc_now
 class CouponService:
     """Service for coupon validation and application."""
 
-    def __init__(self, db: Session):
-        self.db = db
-        self.repo = CouponRepository(db)
+    def __init__(self):
+        self.repo = CouponRepository()
 
-    def validate_and_apply(self, code: str, order_amount: float) -> tuple[float, Coupon]:
+    async def validate_and_apply(self, code: str, order_amount: float) -> tuple[float, Coupon]:
         """Validate coupon and return (discount_amount, coupon_obj)."""
-        coupon = self.repo.get_by_code(code)
+        coupon = await self.repo.get_by_code(code)
         if coupon is None:
             raise BadRequestException(message="Invalid coupon code")
 
@@ -33,9 +32,7 @@ class CouponService:
             raise BadRequestException(message="Coupon usage limit reached")
 
         if coupon.min_order is not None and order_amount < coupon.min_order:
-            raise BadRequestException(
-                message=f"Minimum order amount is {coupon.min_order}"
-            )
+            raise BadRequestException(message=f"Minimum order amount is {coupon.min_order}")
 
         discount = self._calculate_discount(coupon, order_amount)
         return discount, coupon
@@ -47,8 +44,7 @@ class CouponService:
                 discount = min(discount, coupon.max_discount)
         else:
             discount = min(coupon.value, order_amount)
-
         return round(discount, 2)
 
-    def increment_usage(self, coupon: Coupon) -> None:
-        self.repo.increment_used_count(coupon)
+    async def increment_usage(self, coupon: Coupon) -> None:
+        await self.repo.increment_used_count(coupon)

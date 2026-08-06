@@ -13,7 +13,7 @@ from app.core.exceptions import AppException
 from app.middleware.cors import setup_cors
 from app.middleware.logging import LoggingMiddleware, setup_logging
 from app.api.v1.router import api_router
-from app.db.database import check_database_connection, engine
+from app.db.database import init_db, check_database_connection, close_db
 from app.utils.paths import ensure_directory
 from app.seeds.startup_seed import run_startup_seed
 from app.services.broadcast_service import broadcast_scheduler_loop
@@ -32,16 +32,19 @@ async def lifespan(app: FastAPI):
     ensure_directory(settings.LOG_DIR)
     logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 
-    # Auto-create tables + seed data on every startup
+    # Initialise Beanie (MongoDB) connection
+    await init_db()
+
+    if await check_database_connection():
+        logger.info("MongoDB connection established")
+    else:
+        logger.warning("MongoDB connection unavailable at startup")
+
+    # Auto-create collections + seed data on every startup
     try:
-        run_startup_seed()
+        await run_startup_seed()
     except Exception as e:
         logger.error(f"Startup seed failed: {e}")
-
-    if check_database_connection():
-        logger.info("Database connection established")
-    else:
-        logger.warning("Database connection unavailable at startup")
 
     # Background loop that dispatches scheduled broadcasts when their time arrives.
     scheduler_task = asyncio.create_task(broadcast_scheduler_loop())
@@ -51,8 +54,8 @@ async def lifespan(app: FastAPI):
     scheduler_task.cancel()
     logger.info("Broadcast scheduler stopped")
     logger.info(f"Shutting down {settings.APP_NAME}")
-    engine.dispose()
-    logger.info("Database connection pool disposed")
+    close_db()
+    logger.info("MongoDB connection closed")
 
 
 # Create FastAPI application

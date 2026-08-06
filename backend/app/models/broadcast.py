@@ -1,25 +1,29 @@
+"""Broadcast Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, Text
-from app.models.base import BaseModel
+from datetime import datetime
+from typing import Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Broadcast(BaseModel):
-    __tablename__ = "broadcasts"
+class Broadcast(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    message: str
+    audience: str  # all | customers | workers | verified_workers | pending_workers
+    category: str = "announcement"  # announcement | maintenance | emergency | promotion | policy
+    priority: str = "medium"  # low | medium | high
+    status: str = "scheduled"  # scheduled | sent
+    scheduled_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    sent_by: Optional[str] = None
+    total_recipients: int = 0
+    delivered_count: int = 0
+    failed_count: int = 0
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    title = Column(String(255), nullable=False)
-    message = Column(Text, nullable=False)
-    # all | customers | workers | verified_workers | pending_workers
-    audience = Column(String(50), nullable=False)
-    # announcement | maintenance | emergency | promotion | policy
-    category = Column(String(50), nullable=False, default="announcement")
-    # low | medium | high
-    priority = Column(String(20), nullable=False, default="medium")
-    # scheduled | sent
-    status = Column(String(20), nullable=False, default="scheduled")
-    scheduled_at = Column(DateTime(timezone=True), nullable=True)
-    sent_at = Column(DateTime(timezone=True), nullable=True)
-    sent_by = Column(String(36), nullable=True)
-    total_recipients = Column(Integer, default=0, nullable=False)
-    delivered_count = Column(Integer, default=0, nullable=False)
-    failed_count = Column(Integer, default=0, nullable=False)
+    class Settings:
+        name = "broadcasts"

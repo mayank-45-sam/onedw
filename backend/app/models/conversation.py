@@ -1,15 +1,19 @@
+"""Conversation Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Integer, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import List, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class Conversation(BaseModel):
-    __tablename__ = "conversations"
+class Conversation(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    participants: List[str]
+    last_message_id: Optional[str] = None
+    unread_count: int = 0
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    participants = Column(JSON, nullable=False)
-    last_message_id = Column(String(36), nullable=True)
-    unread_count = Column(Integer, default=0, nullable=False)
-
-    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+    class Settings:
+        name = "conversations"

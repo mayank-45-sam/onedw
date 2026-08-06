@@ -1,19 +1,18 @@
-from typing import Optional, List
-from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+"""Async Service repository."""
+from __future__ import annotations
 
-from app.models.category import Category
+import re
+from typing import List, Optional, Tuple
+
 from app.models.service import Service
 from app.repositories.base import BaseRepository
 
 
 class ServiceRepository(BaseRepository[Service]):
-    """Repository for Service model operations."""
+    def __init__(self):
+        super().__init__(Service)
 
-    def __init__(self, db: Session):
-        super().__init__(Service, db)
-
-    def search(
+    async def search(
         self,
         skip: int = 0,
         limit: int = 20,
@@ -23,56 +22,46 @@ class ServiceRepository(BaseRepository[Service]):
         min_rating: Optional[float] = None,
         search_query: Optional[str] = None,
         sort_by: Optional[str] = None,
-    ) -> tuple[List[Service], int]:
-        query = self.db.query(Service)
-
+    ) -> Tuple[List[Service], int]:
+        conditions = []
         if category_id:
-            query = query.filter(Service.category_id == category_id)
+            conditions.append({"category_id": category_id})
         if min_price is not None:
-            query = query.filter(Service.base_price >= min_price)
+            conditions.append({"base_price": {"$gte": min_price}})
         if max_price is not None:
-            query = query.filter(Service.base_price <= max_price)
+            conditions.append({"base_price": {"$lte": max_price}})
         if min_rating is not None:
-            query = query.filter(Service.rating >= min_rating)
+            conditions.append({"rating": {"$gte": min_rating}})
         if search_query:
-            pattern = f"%{search_query}%"
-            query = query.outerjoin(Category, Service.category_id == Category.id).filter(
-                or_(
-                    Service.name.ilike(pattern),
-                    Service.description.ilike(pattern),
-                    Category.name.ilike(pattern),
-                    Category.slug.ilike(pattern),
-                )
-            )
+            pattern = re.compile(search_query, re.IGNORECASE)
+            conditions.append({
+                "$or": [
+                    {"name": pattern},
+                    {"description": pattern},
+                    {"tags": pattern},
+                ]
+            })
 
-        total = query.count()
+        mongo_filter = {"$and": conditions} if conditions else {}
 
+        sort_field = "-popular"
         if sort_by == "price_asc":
-            query = query.order_by(Service.base_price.asc())
+            sort_field = "+base_price"
         elif sort_by == "price_desc":
-            query = query.order_by(Service.base_price.desc())
+            sort_field = "-base_price"
         elif sort_by == "rating":
-            query = query.order_by(Service.rating.desc())
-        elif sort_by == "popular":
-            query = query.order_by(Service.popular.desc(), Service.review_count.desc())
+            sort_field = "-rating"
         elif sort_by == "newest":
-            query = query.order_by(Service.created_at.desc())
-        else:
-            query = query.order_by(Service.popular.desc(), Service.rating.desc())
+            sort_field = "-created_at"
 
-        items = query.offset(skip).limit(limit).all()
+        total = await Service.find(mongo_filter).count()
+        items = await Service.find(mongo_filter).sort(sort_field).skip(skip).limit(limit).to_list()
         return items, total
 
-    def get_by_category(self, category_id: str, skip: int = 0, limit: int = 20) -> tuple[List[Service], int]:
-        query = self.db.query(Service).filter(Service.category_id == category_id)
-        total = query.count()
-        items = query.order_by(Service.rating.desc()).offset(skip).limit(limit).all()
+    async def get_by_category(self, category_id: str, skip: int = 0, limit: int = 20) -> Tuple[List[Service], int]:
+        total = await Service.find(Service.category_id == category_id).count()
+        items = await Service.find(Service.category_id == category_id).sort("-rating").skip(skip).limit(limit).to_list()
         return items, total
 
-    def count_by_category(self, category_id: str) -> int:
-        return (
-            self.db.query(func.count(Service.id))
-            .filter(Service.category_id == category_id)
-            .scalar()
-            or 0
-        )
+    async def count_by_category(self, category_id: str) -> int:
+        return await Service.find(Service.category_id == category_id).count()

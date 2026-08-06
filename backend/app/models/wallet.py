@@ -1,19 +1,19 @@
+"""Wallet Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, Float, ForeignKey
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from pydantic import Field
+from app.models.base import BaseDocument
 
 
-class Wallet(BaseModel):
-    __tablename__ = "wallets"
+class Wallet(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    balance: float = 0.0
+    currency: str = "INR"
+    pending_balance: float = 0.0
+    total_earnings: float = 0.0
+    total_spent: float = 0.0
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    balance = Column(Float, default=0.0, nullable=False)
-    currency = Column(String(3), default="INR", nullable=False)
-    pending_balance = Column(Float, default=0.0, nullable=False)
-    total_earnings = Column(Float, default=0.0, nullable=False)
-    total_spent = Column(Float, default=0.0, nullable=False)
-
-    user = relationship("User", back_populates="wallet")
-    transactions = relationship("WalletTransaction", back_populates="wallet", cascade="all, delete-orphan")
+    class Settings:
+        name = "wallets"

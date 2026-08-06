@@ -21,7 +21,8 @@ export const imageAnalysisService = {
       let detail = 'Analysis failed. Please try again.';
       try {
         const err = await res.json();
-        if (err && typeof err.detail === 'string') detail = err.detail;
+        if (err && typeof err.message === 'string') detail = err.message;
+        else if (err && typeof err.detail === 'string') detail = err.detail;
       } catch { /* ignore */ }
       throw new Error(detail);
     }

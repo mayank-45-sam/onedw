@@ -1,13 +1,13 @@
-"""SQLAlchemy ORM models."""
+"""Beanie ODM document models for OneDW."""
 
-from app.models.base import BaseModel
+from app.models.base import BaseDocument
 from app.models.user import User, UserRole
 from app.models.customer import Customer
 from app.models.worker import Worker
 from app.models.admin import Admin
 from app.models.category import Category
 from app.models.service import Service
-from app.models.booking import Booking, BookingStatus, PaymentStatus, PaymentMethod
+from app.models.booking import Booking, BookingStatus, PaymentStatus, PaymentMethod, BookingType
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.coupon import Coupon
 from app.models.wallet import Wallet
@@ -45,7 +45,7 @@ from app.models.verification import (
 )
 
 __all__ = [
-    "BaseModel",
+    "BaseDocument",
     "User",
     "UserRole",
     "Customer",
@@ -57,6 +57,7 @@ __all__ = [
     "BookingStatus",
     "PaymentStatus",
     "PaymentMethod",
+    "BookingType",
     "BookingStatusHistory",
     "Coupon",
     "Wallet",

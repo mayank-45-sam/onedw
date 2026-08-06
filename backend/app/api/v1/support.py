@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from app.db.database import get_db
 from app.models.user import User, UserRole
 from app.models.notification import Notification
 from app.schemas.support import SupportContactRequest
@@ -11,13 +9,12 @@ router = APIRouter(prefix="/support", tags=["Support"])
 
 
 @router.post("/contact", summary="Send a support message to the admin team")
-def contact_support(body: SupportContactRequest, db: Session = Depends(get_db)):
+async def contact_support(body: SupportContactRequest):
     """Create an admin notification for each message submitted from the Help page."""
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.ADMIN, User.is_active == True)
-        .all()
-    )
+    admins = await User.find(
+        User.role == UserRole.ADMIN,
+        User.is_active == True,
+    ).to_list()
 
     name = body.name.strip()
     subject = body.subject.strip()
@@ -36,8 +33,7 @@ def contact_support(body: SupportContactRequest, db: Session = Depends(get_db)):
                 "message": message,
             },
         )
-        db.add(notification)
-        db.flush()
+        await notification.insert()
 
         emit_to_user(
             admin.id,
@@ -53,8 +49,6 @@ def contact_support(body: SupportContactRequest, db: Session = Depends(get_db)):
                 }
             },
         )
-
-    db.commit()
 
     return {
         "success": True,

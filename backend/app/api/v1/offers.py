@@ -1,23 +1,19 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 
-from app.db.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.models.coupon import Coupon
-from app.core.exceptions import NotFoundException
 
 router = APIRouter(prefix="/offers", tags=["Offers"])
 
 
 @router.get("", summary="List offers and promotions")
-def list_offers(
+async def list_offers(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    coupons = db.query(Coupon).filter(Coupon.is_active == True).order_by(Coupon.created_at.desc()).limit(limit).all()
+    coupons = await Coupon.find(Coupon.is_active == True).sort(-Coupon.created_at).limit(limit).to_list()
     offers = [
         {
             "id": c.id,

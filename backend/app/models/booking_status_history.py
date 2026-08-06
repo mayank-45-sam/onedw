@@ -1,17 +1,21 @@
+"""BookingStatusHistory Beanie document."""
+from __future__ import annotations
+
 import uuid
-from sqlalchemy import Column, String, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from typing import Any, Dict, Optional
+
+from pydantic import Field
+
+from app.models.base import BaseDocument
 
 
-class BookingStatusHistory(BaseModel):
-    __tablename__ = "booking_status_history"
+class BookingStatusHistory(BaseDocument):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    booking_id: str
+    status: str
+    note: Optional[str] = None
+    changed_by: Optional[str] = None
+    metadata_: Optional[Dict[str, Any]] = Field(default=None, alias="metadata")
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    booking_id = Column(String(36), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String(50), nullable=False)
-    note = Column(String(500), nullable=True)
-    changed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    metadata_ = Column("metadata", JSON, nullable=True)
-
-    booking = relationship("Booking", back_populates="status_history")
+    class Settings:
+        name = "booking_status_history"

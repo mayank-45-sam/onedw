@@ -1,57 +1,111 @@
-from collections.abc import Generator
+"""
+MongoDB database layer using Motor (async driver) + Beanie (ODM).
+Replaces the previous SQLAlchemy engine/session setup.
+"""
+from __future__ import annotations
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from typing import TYPE_CHECKING, List, Type
+
+import motor.motor_asyncio
+from beanie import Document, init_beanie
+from loguru import logger
 
 from app.core.config import settings
 
+if TYPE_CHECKING:
+    pass
 
-class Base(DeclarativeBase):
-    """SQLAlchemy 2.0 declarative base for ORM models."""
-
-
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE if "postgresql" in settings.DATABASE_URL else 5,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW if "postgresql" in settings.DATABASE_URL else 5,
-    pool_pre_ping=True,
-    echo=settings.DEBUG,
-    **({"connect_args": {"connect_timeout": 2}} if "postgresql" in settings.DATABASE_URL else {}),
-)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-    class_=Session,
-)
+# ---------------------------------------------------------------------------
+# Motor async client
+# ---------------------------------------------------------------------------
+_mongo_client: motor.motor_asyncio.AsyncIOMotorClient | None = None
+_mongo_db: motor.motor_asyncio.AsyncIOMotorDatabase | None = None
 
 
-def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency function to get database session.
-    Used in FastAPI endpoints via Depends(get_db).
-    """
-    db = SessionLocal()
+def get_mongo_client() -> motor.motor_asyncio.AsyncIOMotorClient:
+    global _mongo_client
+    if _mongo_client is None:
+        _mongo_client = motor.motor_asyncio.AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            serverSelectionTimeoutMS=5000,
+        )
+    return _mongo_client
+
+
+def get_mongo_db() -> motor.motor_asyncio.AsyncIOMotorDatabase:
+    global _mongo_db
+    if _mongo_db is None:
+        _mongo_db = get_mongo_client()[settings.MONGODB_DB_NAME]
+    return _mongo_db
+
+
+# ---------------------------------------------------------------------------
+# Beanie initialisation — called once at startup in main.py
+# ---------------------------------------------------------------------------
+async def init_db() -> None:
+    """Initialise Beanie with all document models."""
+    # Import here to avoid circular imports at module load time
+    from app.models import (
+        User, Customer, Worker, Admin,
+        Category, Service,
+        Booking, BookingStatusHistory,
+        Coupon, Wallet, WalletTransaction,
+        Review, Complaint, Notification,
+        Broadcast, Conversation, Message,
+        PortfolioImage, Certificate,
+        WorkerAvailability, WorkerLocation,
+        WorkerSkill, WorkerLanguage,
+        RefreshToken, OTP,
+        ChatSession, ChatMessage,
+        WorkerFraudData, FraudReport, SuspiciousActivity,
+        ImageAnalysis,
+        WorkerVerification, SkillTestSession, PracticalAssessment,
+        VoiceInterview, VerificationCertificate,
+        CustomJob, JobBid, NegotiationMessage,
+    )
+
+    document_models: List[Type[Document]] = [
+        User, Customer, Worker, Admin,
+        Category, Service,
+        Booking, BookingStatusHistory,
+        Coupon, Wallet, WalletTransaction,
+        Review, Complaint, Notification,
+        Broadcast, Conversation, Message,
+        PortfolioImage, Certificate,
+        WorkerAvailability, WorkerLocation,
+        WorkerSkill, WorkerLanguage,
+        RefreshToken, OTP,
+        ChatSession, ChatMessage,
+        WorkerFraudData, FraudReport, SuspiciousActivity,
+        ImageAnalysis,
+        WorkerVerification, SkillTestSession, PracticalAssessment,
+        VoiceInterview, VerificationCertificate,
+        CustomJob, JobBid, NegotiationMessage,
+    ]
+
+    await init_beanie(
+        database=get_mongo_db(),
+        document_models=document_models,
+    )
+    logger.info(f"Beanie initialised with {len(document_models)} document models")
+
+
+async def check_database_connection() -> bool:
+    """Verify the MongoDB server accepts connections."""
     try:
-        yield db
-    finally:
-        db.close()
-
-
-def check_database_connection() -> bool:
-    """Verify the database accepts connections."""
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+        client = get_mongo_client()
+        await client.admin.command("ping")
         return True
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"MongoDB connection check failed: {exc}")
         return False
 
 
-def init_db() -> None:
-    """
-    Initialize database tables.
-    Note: In production, use Alembic migrations instead.
-    """
-    Base.metadata.create_all(bind=engine)
+def close_db() -> None:
+    """Close the Motor client — called on application shutdown."""
+    global _mongo_client, _mongo_db
+    if _mongo_client is not None:
+        _mongo_client.close()
+        _mongo_client = None
+        _mongo_db = None
+        logger.info("MongoDB connection closed")
