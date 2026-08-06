@@ -164,10 +164,11 @@ app = SocketIOASGIApp(sio, other_asgi_app=app)
 if __name__ == "__main__":
     import uvicorn
     
+    port = int(os.environ.get("PORT", settings.PORT))
     uvicorn.run(
         "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host="0.0.0.0",
+        port=port,
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower()
     )
