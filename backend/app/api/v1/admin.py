@@ -16,6 +16,7 @@ from app.models.service import Service
 from app.models.category import Category
 from app.models.coupon import Coupon
 from app.models.complaint import Complaint
+from app.services.booking_service import BookingService
 from app.core.exceptions import NotFoundException, BadRequestException
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -88,13 +89,16 @@ async def get_booking(booking_id: str, current_user: User = Depends(RequireAdmin
 async def update_booking(
     booking_id: str, body: dict = Body(...), current_user: User = Depends(RequireAdmin),
 ):
-    b = await Booking.find_one(Booking.id == booking_id)
-    if b is None:
-        raise NotFoundException(message="Booking not found")
-    if "status" in body:
-        b.status = BookingStatus(body["status"])
-    await b.save()
-    return {"success": True, "message": "Booking updated", "data": {"id": b.id, "status": b.status.value if b.status else "pending"}}
+    """Update booking. Status changes go through the same validated transition flow."""
+    service = BookingService()
+    result = await service.update_booking_status(
+        booking_id=booking_id,
+        new_status=body.get("status"),
+        user_id=current_user.id,
+        user_role=current_user.role.value,
+        note=body.get("note"),
+    )
+    return {"success": True, "message": "Booking updated", "data": {"id": result["id"], "status": result["status"]}}
 
 
 @router.delete("/bookings/{booking_id}", summary="Delete booking")

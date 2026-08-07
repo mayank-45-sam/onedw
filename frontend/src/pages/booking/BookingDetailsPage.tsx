@@ -61,7 +61,10 @@ export default function BookingDetailsPage() {
   const updatedEvent = useSocketEvent<BookingSocketEvent>('booking:updated');
   useEffect(() => {
     if (!updatedEvent.data || !id) return;
-    if (updatedEvent.data.booking?._id !== id) return;
+    const socketBooking = updatedEvent.data.booking;
+    if (!socketBooking) return;
+    const eventId = socketBooking._id ?? (socketBooking as { id?: string }).id;
+    if (eventId !== id) return;
     qc.invalidateQueries({ queryKey: queryKeys.bookings.detail(id) });
     qc.invalidateQueries({ queryKey: ['bookings'] });
     if (user?.role === 'customer' && updatedEvent.data.message) {
@@ -81,8 +84,9 @@ export default function BookingDetailsPage() {
 
   const progressMutation = useMutation({
     mutationFn: (status: BookingStatus) => advanceBooking(id!, status),
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success('Booking updated');
+      qc.setQueryData(queryKeys.bookings.detail(id!), data);
       qc.invalidateQueries({ queryKey: queryKeys.bookings.detail(id!) });
       qc.invalidateQueries({ queryKey: queryKeys.bookings.upcoming });
       qc.invalidateQueries({ queryKey: queryKeys.bookings.recent });
@@ -97,6 +101,7 @@ export default function BookingDetailsPage() {
 
   const b = bookingQuery.data;
   const currentStep = STATUS_FLOW.findIndex((s) => s.status === b.status);
+  const isCompleted = b.status === 'completed';
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -134,8 +139,8 @@ export default function BookingDetailsPage() {
                 )}
 
                 {STATUS_FLOW.map((s, i) => {
-                  const done = i < currentStep;
-                  const active = i === currentStep;
+                  const done = i < currentStep || (isCompleted && i === currentStep);
+                  const active = i === currentStep && !done;
                   return (
                     <div key={s.status} className="relative z-10 flex flex-1 flex-col items-center gap-2">
                       <div
@@ -321,7 +326,7 @@ export default function BookingDetailsPage() {
               </Card>
 
               <div className="space-y-2">
-                {user?.role === 'worker' &&
+                {user?.role === 'worker' && b.worker?.userId === user._id &&
                   (() => {
                     const action = getNextBookingAction(b.status);
                     if (!action) return null;

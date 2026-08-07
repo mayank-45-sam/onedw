@@ -28,7 +28,7 @@ export interface Booking {
   customerId: string;
   customer?: { _id: string; name: string; avatar?: string; phone?: string };
   workerId: string;
-  worker?: { _id: string; name: string; avatar?: string; profession: string };
+  worker?: { _id: string; userId: string; name: string; avatar?: string; profession: string };
   serviceId: string;
   service?: Service;
   status: BookingStatus;

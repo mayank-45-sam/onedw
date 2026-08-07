@@ -166,6 +166,14 @@ class BookingService:
 
         current = booking.status.value if hasattr(booking.status, "value") else booking.status
         allowed = VALID_STATUS_TRANSITIONS.get(current, [])
+
+        # Role-based guards: customers may only cancel; workers must be assigned.
+        if user_role == "customer" and new_status != BookingStatus.CANCELLED.value:
+            raise ForbiddenException(message="Customers can only cancel a booking")
+        if user_role == "admin" and new_status == BookingStatus.REFUNDED.value:
+            if current in (BookingStatus.COMPLETED.value, BookingStatus.CANCELLED.value):
+                allowed = allowed + [BookingStatus.REFUNDED.value]
+
         if new_status not in allowed:
             raise BadRequestException(message=f"Cannot transition from '{current}' to '{new_status}'")
 
